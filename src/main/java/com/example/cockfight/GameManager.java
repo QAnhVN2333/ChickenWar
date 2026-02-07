@@ -30,7 +30,7 @@ public class GameManager {
     private Chicken chicken1; // Red
     private Chicken chicken2; // Blue
     private boolean isRunning = false;
-    private boolean canBet = false; // Chỉ cho cược khi chưa đánh
+    private boolean canBet = false;
     private BukkitRunnable skillTask;
     private final Random random = new Random();
 
@@ -71,8 +71,8 @@ public class GameManager {
         }
         spawnFighters(center);
 
-        // Mở cổng đặt cược
         canBet = true;
+        // Đảm bảo map sạch sẽ
         redBets.clear();
         blueBets.clear();
 
@@ -103,36 +103,52 @@ public class GameManager {
         return c;
     }
 
-    // --- 2. BETTING SYSTEM (LOGIC MỚI) ---
+    // --- 2. BETTING SYSTEM ---
     public boolean placeBet(Player player, String side, double amount) {
+        Economy eco = CockfightPlugin.getEconomy();
+        if (eco == null) {
+            player.sendMessage(Component.text("Server chưa cài đặt hệ thống tiền tệ!").color(NamedTextColor.RED));
+            return false;
+        }
+
         if (!canBet) {
             player.sendMessage(Component.text("Đã khóa sổ! Không thể đặt cược lúc này.").color(NamedTextColor.RED));
             return false;
         }
 
-        Economy eco = CockfightPlugin.getEconomy();
         if (!eco.has(player, amount)) {
             player.sendMessage(Component.text("Bạn không đủ tiền!").color(NamedTextColor.RED));
             return false;
         }
 
-        // Kiểm tra xem đã cược 2 mang chưa (Chống gian lận)
         if ((side.equalsIgnoreCase("red") && blueBets.containsKey(player.getUniqueId())) ||
                 (side.equalsIgnoreCase("blue") && redBets.containsKey(player.getUniqueId()))) {
             player.sendMessage(Component.text("Bạn chỉ được chọn 1 phe thôi!").color(NamedTextColor.RED));
             return false;
         }
 
-        // Trừ tiền
         eco.withdrawPlayer(player, amount);
 
+        String betInfo;
         if (side.equalsIgnoreCase("red")) {
             redBets.put(player.getUniqueId(), redBets.getOrDefault(player.getUniqueId(), 0.0) + amount);
-            player.sendMessage(Component.text("Đã đặt " + amount + "$ cho Đội Đỏ!").color(NamedTextColor.RED));
+            betInfo = "§cĐỎ (RED)";
         } else {
             blueBets.put(player.getUniqueId(), blueBets.getOrDefault(player.getUniqueId(), 0.0) + amount);
-            player.sendMessage(Component.text("Đã đặt " + amount + "$ cho Đội Xanh!").color(NamedTextColor.BLUE));
+            betInfo = "§9XANH (BLUE)";
         }
+
+        double totalRed = redBets.values().stream().mapToDouble(Double::doubleValue).sum();
+        double totalBlue = blueBets.values().stream().mapToDouble(Double::doubleValue).sum();
+
+        Bukkit.broadcast(Component.text("➤ ").color(NamedTextColor.GOLD)
+                .append(player.displayName())
+                .append(Component.text(" đã cược ").color(NamedTextColor.YELLOW))
+                .append(Component.text(Math.round(amount) + "$").color(NamedTextColor.GREEN))
+                .append(Component.text(" vào " + betInfo))
+                .append(Component.text(" | Tỉ số tiền: §c" + Math.round(totalRed) + "$ §fvs §9" + Math.round(totalBlue) + "$"))
+        );
+
         return true;
     }
 
@@ -144,9 +160,16 @@ public class GameManager {
         }
 
         isRunning = true;
-        canBet = false; // Khóa cược
+        canBet = false;
 
-        Bukkit.broadcast(Component.text("KHÓA SỔ CƯỢC! TRẬN ĐẤU BẮT ĐẦU!").color(NamedTextColor.GOLD));
+        double totalRed = redBets.values().stream().mapToDouble(Double::doubleValue).sum();
+        double totalBlue = blueBets.values().stream().mapToDouble(Double::doubleValue).sum();
+
+        Bukkit.broadcast(Component.text("====== KHÓA SỔ CƯỢC ======").color(NamedTextColor.GOLD));
+        Bukkit.broadcast(Component.text("Tổng tiền Đội Đỏ:  ").color(NamedTextColor.RED).append(Component.text(Math.round(totalRed) + "$").color(NamedTextColor.YELLOW)));
+        Bukkit.broadcast(Component.text("Tổng tiền Đội Xanh: ").color(NamedTextColor.BLUE).append(Component.text(Math.round(totalBlue) + "$").color(NamedTextColor.YELLOW)));
+        Bukkit.broadcast(Component.text("Tổng Quỹ (Jackpot): ").color(NamedTextColor.LIGHT_PURPLE).append(Component.text(Math.round(totalRed + totalBlue) + "$").color(NamedTextColor.GREEN)));
+        Bukkit.broadcast(Component.text("==========================").color(NamedTextColor.GOLD));
 
         setupWarrior(chicken1, chicken2);
         setupWarrior(chicken2, chicken1);
@@ -155,12 +178,15 @@ public class GameManager {
 
     public void restartMatch() {
         if (backupBlocks.isEmpty() || arenaCenter == null) return;
+
+        // Luôn luôn hoàn tiền nếu restart khi chưa có kết quả thắng thua
+        refundBets();
+
         isRunning = false;
         if (skillTask != null) skillTask.cancel();
         if (chicken1 != null) chicken1.remove();
         if (chicken2 != null) chicken2.remove();
 
-        // Reset cược khi restart
         redBets.clear();
         blueBets.clear();
         canBet = true;
@@ -236,8 +262,12 @@ public class GameManager {
         c.getWorld().sendMessage(c.customName().append(Component.text(action).color(NamedTextColor.YELLOW)));
     }
 
-    // --- 5. END & PAYOUT (TRẢ THƯỞNG) ---
+    // --- 5. END & PAYOUT (SỬA LỖI HOÀN TIỀN) ---
     public void endFight() {
+        // QUAN TRỌNG: Không kiểm tra isRunning nữa.
+        // Cứ còn tiền trong danh sách cược là hoàn trả hết (vì chưa trả thưởng)
+        refundBets();
+
         isRunning = false; canBet = false;
         if (skillTask != null) skillTask.cancel();
         if (chicken1 != null) chicken1.remove();
@@ -252,66 +282,116 @@ public class GameManager {
         Bukkit.broadcast(Component.text("Sân đấu đã đóng.").color(NamedTextColor.GREEN));
     }
 
+    // --- HÀM HOÀN TIỀN (REFUND) ---
+    private void refundBets() {
+        Economy eco = CockfightPlugin.getEconomy();
+        if (eco == null) return;
+
+        // Nếu cả 2 map đều trống (đã trả thưởng xong hoặc không ai cược) -> Không làm gì
+        if (redBets.isEmpty() && blueBets.isEmpty()) return;
+
+        boolean refunded = false;
+
+        // Hoàn tiền đội Đỏ
+        for (Map.Entry<UUID, Double> entry : redBets.entrySet()) {
+            OfflinePlayer p = Bukkit.getOfflinePlayer(entry.getKey());
+            eco.depositPlayer(p, entry.getValue());
+            refunded = true;
+        }
+
+        // Hoàn tiền đội Xanh
+        for (Map.Entry<UUID, Double> entry : blueBets.entrySet()) {
+            OfflinePlayer p = Bukkit.getOfflinePlayer(entry.getKey());
+            eco.depositPlayer(p, entry.getValue());
+            refunded = true;
+        }
+
+        // Sau khi hoàn tiền xong thì xóa sạch danh sách để tránh hoàn tiền lần 2
+        redBets.clear();
+        blueBets.clear();
+
+        if (refunded) {
+            Bukkit.broadcast(Component.text("⚠ Trận đấu bị hủy! Đã hoàn tiền cược cho tất cả mọi người.").color(NamedTextColor.RED));
+        }
+    }
+
     public void forceEnd() { endFight(); }
     public boolean isGameRunning() { return isRunning; }
 
     public void onChickenDeath(Entity deadChicken) {
         if (!isRunning) return;
 
-        // Xác định người thắng
         String winnerSide = "";
         Chicken winnerChicken = null;
 
-        if (deadChicken.equals(chicken1)) { // Đỏ chết -> Xanh thắng
+        if (deadChicken.equals(chicken1)) {
             winnerSide = "blue";
             winnerChicken = chicken2;
-        } else if (deadChicken.equals(chicken2)) { // Xanh chết -> Đỏ thắng
+        } else if (deadChicken.equals(chicken2)) {
             winnerSide = "red";
             winnerChicken = chicken1;
         }
 
         if (winnerChicken != null) {
             announceWinner(winnerChicken);
-            processPayout(winnerSide); // Chia tiền
+            processPayout(winnerSide);
         }
     }
 
     private void processPayout(String winnerSide) {
         Economy eco = CockfightPlugin.getEconomy();
+        if (eco == null) return;
 
-        // Tính tổng quỹ
         double totalRed = redBets.values().stream().mapToDouble(Double::doubleValue).sum();
         double totalBlue = blueBets.values().stream().mapToDouble(Double::doubleValue).sum();
         double totalPool = totalRed + totalBlue;
 
         Map<UUID, Double> winners = winnerSide.equals("red") ? redBets : blueBets;
+        Map<UUID, Double> losers = winnerSide.equals("red") ? blueBets : redBets;
+
         double totalWinningBets = winnerSide.equals("red") ? totalRed : totalBlue;
 
         if (winners.isEmpty()) {
-            Bukkit.broadcast(Component.text("Không ai đặt cược cho bên thắng cả! Nhà cái ăn hết.").color(NamedTextColor.GRAY));
-            return;
+            Bukkit.broadcast(Component.text("Nhà cái thắng toàn bộ (Không ai đặt bên thắng)!").color(NamedTextColor.GRAY));
+        } else {
+            Bukkit.broadcast(Component.text("--- TRẢ THƯỞNG (Phí sàn 5%) ---").color(NamedTextColor.GOLD));
+
+            // TRẢ NGƯỜI THẮNG
+            for (Map.Entry<UUID, Double> entry : winners.entrySet()) {
+                UUID uid = entry.getKey();
+                double myBet = entry.getValue();
+
+                double grossPayout = 0;
+                if (totalWinningBets > 0) {
+                    grossPayout = (myBet / totalWinningBets) * totalPool;
+                }
+                double finalPayout = grossPayout * 0.95;
+
+                OfflinePlayer p = Bukkit.getOfflinePlayer(uid);
+                eco.depositPlayer(p, finalPayout);
+
+                if (p.isOnline() && p.getPlayer() != null) {
+                    p.getPlayer().sendMessage(Component.text("Chúc mừng! Bạn nhận được: ")
+                            .color(NamedTextColor.GREEN)
+                            .append(Component.text(Math.round(finalPayout) + "$").color(NamedTextColor.GOLD))
+                            .append(Component.text(" (Đã trừ 5% phí)").color(NamedTextColor.GRAY)));
+                }
+            }
         }
 
-        Bukkit.broadcast(Component.text("--- TRẢ THƯỞNG ---").color(NamedTextColor.GOLD));
-
-        for (Map.Entry<UUID, Double> entry : winners.entrySet()) {
-            UUID uid = entry.getKey();
-            double betAmount = entry.getValue();
-
-            // Công thức: Tiền nhận = (Tiền mình cược / Tổng tiền bên thắng) * Tổng quỹ
-            // Nếu chỉ có 1 bên đặt, thì nhận lại đúng số tiền mình đặt (Hòa vốn)
-            double payout = 0;
-            if (totalWinningBets > 0) {
-                payout = (betAmount / totalWinningBets) * totalPool;
-            }
-
+        // AN ỦI NGƯỜI THUA
+        for (UUID uid : losers.keySet()) {
             OfflinePlayer p = Bukkit.getOfflinePlayer(uid);
-            eco.depositPlayer(p, payout);
-
             if (p.isOnline() && p.getPlayer() != null) {
-                p.getPlayer().sendMessage(Component.text("Bạn đã thắng cược! Nhận được: " + Math.round(payout) + "$").color(NamedTextColor.GREEN));
+                p.getPlayer().sendMessage(Component.text("Rất tiếc! Chiến kê bạn chọn đã thua.").color(NamedTextColor.RED));
+                p.getPlayer().sendMessage(Component.text("Cảm ơn đã tham gia và chúc may mắn lần sau!").color(NamedTextColor.GRAY));
             }
         }
+
+        // QUAN TRỌNG: Xóa sổ sách sau khi đã trả thưởng
+        // Điều này đảm bảo khi gọi endFight() sau đó, nó thấy list rỗng và KHÔNG hoàn tiền nữa
+        redBets.clear();
+        blueBets.clear();
     }
 
     private void announceWinner(Chicken winner) {
@@ -326,7 +406,6 @@ public class GameManager {
         winner.getWorld().playSound(winner.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
     }
 
-    // AI Class (Giữ nguyên)
     public static class CockfightAttackGoal implements Goal<Chicken> {
         private final Chicken chicken;
         private final CockfightPlugin plugin;
