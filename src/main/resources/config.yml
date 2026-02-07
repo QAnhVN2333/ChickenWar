@@ -1,0 +1,11 @@
+# Cấu hình Đấu Trường Gà
+
+# Lượng máu tối đa của chiến kê (Mặc định: 100.0 = 50 Tim)
+chicken-health: 100.0
+
+# Tỉ lệ tung skill mỗi lần kiểm tra (0.0 đến 1.0)
+# 0.5 nghĩa là 50% cơ hội tung chiêu mỗi giây
+skill-chance: 0.5
+
+# Sát thương cơ bản khi mổ (Mặc định: 4.0 = 2 Tim)
+base-damage: 4.0
