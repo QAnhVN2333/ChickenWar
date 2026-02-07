@@ -22,10 +22,9 @@ public class CockfightCommand implements CommandExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) return false;
 
-        // Lệnh Reload
         if (args[0].equalsIgnoreCase("reload")) {
             plugin.reloadConfig();
-            sender.sendMessage(Component.text("Đã reload config thành công!").color(NamedTextColor.GREEN));
+            sender.sendMessage(Component.text("Đã reload config!").color(NamedTextColor.GREEN));
             return true;
         }
 
@@ -36,20 +35,43 @@ public class CockfightCommand implements CommandExecutor {
 
         switch (args[0].toLowerCase()) {
             case "build":
-                player.sendMessage(Component.text("Đang xây dựng đấu trường...").color(NamedTextColor.YELLOW));
                 gameManager.buildArena(player.getLocation());
                 break;
             case "start":
                 gameManager.startFight();
                 break;
-            case "restart": // LỆNH MỚI
+            case "restart":
                 gameManager.restartMatch();
                 break;
             case "end":
                 gameManager.endFight();
                 break;
+            case "bet":
+                // Cú pháp: /cockfight bet <red/blue> <amount>
+                if (args.length < 3) {
+                    player.sendMessage(Component.text("Sai cú pháp! Dùng: /cockfight bet <red/blue> <số tiền>").color(NamedTextColor.RED));
+                    return true;
+                }
+                String side = args[1];
+                double amount;
+                try {
+                    amount = Double.parseDouble(args[2]);
+                    if (amount <= 0) throw new NumberFormatException();
+                } catch (NumberFormatException e) {
+                    player.sendMessage(Component.text("Số tiền không hợp lệ!").color(NamedTextColor.RED));
+                    return true;
+                }
+
+                if (!side.equalsIgnoreCase("red") && !side.equalsIgnoreCase("blue")) {
+                    player.sendMessage(Component.text("Chỉ được chọn red (đỏ) hoặc blue (xanh)!").color(NamedTextColor.RED));
+                    return true;
+                }
+
+                gameManager.placeBet(player, side, amount);
+                break;
+
             default:
-                player.sendMessage(Component.text("Sai cú pháp! /cockfight <build|start|restart|end|reload>").color(NamedTextColor.RED));
+                player.sendMessage(Component.text("Lệnh không tồn tại.").color(NamedTextColor.RED));
         }
         return true;
     }

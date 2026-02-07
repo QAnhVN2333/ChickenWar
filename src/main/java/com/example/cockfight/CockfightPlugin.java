@@ -1,24 +1,30 @@
 package com.example.cockfight;
 
+import net.milkbowl.vault.economy.Economy;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class CockfightPlugin extends JavaPlugin {
 
     private GameManager gameManager;
+    private static Economy economy = null; // Biến lưu trữ hệ thống tiền tệ
 
     @Override
     public void onEnable() {
-        // 1. Tạo file config.yml nếu chưa có
-        saveDefaultConfig();
+        // 1. Setup Economy (Vault)
+        if (!setupEconomy()) {
+            getLogger().severe("Không tìm thấy plugin Vault hoặc plugin tiền tệ (Essentials, CMI...)!");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
 
-        // 2. Khởi tạo Game Manager
+        saveDefaultConfig();
         this.gameManager = new GameManager(this);
 
-        // 3. Đăng ký lệnh & Sự kiện
-        getCommand("cockfight").setExecutor(new CockfightCommand(this, gameManager)); // Truyền thêm plugin vào Command
+        getCommand("cockfight").setExecutor(new CockfightCommand(this, gameManager));
         getServer().getPluginManager().registerEvents(new GameListener(gameManager), this);
 
-        getLogger().info("Cockfight Arena 2.2 (Reloadable) da san sang!");
+        getLogger().info("Cockfight 3.0 (Casino) da san sang!");
     }
 
     @Override
@@ -26,5 +32,23 @@ public class CockfightPlugin extends JavaPlugin {
         if (gameManager != null) {
             gameManager.forceEnd();
         }
+    }
+
+    // Hàm kết nối Vault
+    private boolean setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            return false;
+        }
+        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        if (rsp == null) {
+            return false;
+        }
+        economy = rsp.getProvider();
+        return economy != null;
+    }
+
+    // Getter để GameManager dùng
+    public static Economy getEconomy() {
+        return economy;
     }
 }
