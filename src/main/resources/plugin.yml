@@ -4,10 +4,12 @@ main: com.example.cockfight.CockfightPlugin
 api-version: '1.21'
 description: Minigame Da Ga dinh cao.
 author: YourName
+# Thêm dòng này để server biết plugin này cần Vault mới chạy được
+depend: [Vault]
 commands:
   cockfight:
     description: Lenh quan ly dau truong ga
-    usage: /cockfight <build|start|end|reload>
+    usage: /cockfight <build|start|end|reload|restart|bet>
     permission: cockfight.admin
 permissions:
   cockfight.admin:

@@ -4,11 +4,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example</groupId>
-    <artifactId>iron-chicken</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <artifactId>cockfight</artifactId>
+    <version>2.2</version>
     <packaging>jar</packaging>
 
-    <name>IronChicken</name>
+    <name>Cockfight</name>
 
     <properties>
         <java.version>21</java.version>
@@ -16,6 +16,8 @@
     </properties>
 
     <build>
+        <finalName>Cockfight</finalName>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

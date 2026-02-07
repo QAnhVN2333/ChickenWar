@@ -72,7 +72,6 @@ public class GameManager {
         spawnFighters(center);
 
         canBet = true;
-        // Đảm bảo map sạch sẽ
         redBets.clear();
         blueBets.clear();
 
@@ -179,8 +178,7 @@ public class GameManager {
     public void restartMatch() {
         if (backupBlocks.isEmpty() || arenaCenter == null) return;
 
-        // Luôn luôn hoàn tiền nếu restart khi chưa có kết quả thắng thua
-        refundBets();
+        if (isRunning) refundBets();
 
         isRunning = false;
         if (skillTask != null) skillTask.cancel();
@@ -207,7 +205,7 @@ public class GameManager {
         self.setTarget(target);
     }
 
-    // --- 4. SKILL SYSTEM ---
+    // --- 4. SKILL SYSTEM (CẬP NHẬT 8 SKILL) ---
     private void startSkillScheduler() {
         skillTask = new BukkitRunnable() {
             @Override
@@ -225,35 +223,84 @@ public class GameManager {
 
     private void tryCastSkill(Chicken caster, LivingEntity target) {
         if (random.nextDouble() > plugin.getConfig().getDouble("skill-chance", 0.5)) return;
-        int skillType = random.nextInt(4);
+
+        // Random từ 0 đến 7 (8 loại skill)
+        int skillType = random.nextInt(8);
         World world = caster.getWorld();
+
         switch (skillType) {
-            case 0:
+            case 0: // Lôi Điểu
                 world.playSound(caster.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.8f, 2f);
                 world.spawnParticle(Particle.CRIT, target.getLocation().add(0, 0.5, 0), 10);
                 target.damage(3.0, caster);
                 sendMessage(caster, " tung Lôi Điểu!");
                 break;
-            case 1:
+
+            case 1: // Cú Đá Xoáy
                 world.playSound(caster.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 2f);
                 world.spawnParticle(Particle.CLOUD, target.getLocation(), 10, 0.2, 0.2, 0.2, 0.1);
                 target.setVelocity(target.getLocation().toVector().subtract(caster.getLocation().toVector()).normalize().multiply(1.0).setY(0.8));
                 target.damage(4.0, caster);
                 sendMessage(caster, " tung Cú Đá Xoáy!");
                 break;
-            case 2:
+
+            case 2: // Bom Trứng
                 world.playSound(caster.getLocation(), Sound.ENTITY_EGG_THROW, 1f, 0.5f);
                 world.spawnParticle(Particle.EXPLOSION_EMITTER, target.getLocation(), 1);
                 world.createExplosion(target.getLocation(), 0F, false);
                 target.damage(5.0, caster);
                 sendMessage(caster, " ném Bom Trứng!");
                 break;
-            case 3:
+
+            case 3: // Tiếng Gáy Sonic
                 world.playSound(caster.getLocation(), Sound.ENTITY_WARDEN_SONIC_BOOM, 0.5f, 1.5f);
                 world.spawnParticle(Particle.SWEEP_ATTACK, caster.getLocation().add(0, 0.5, 0), 1);
                 target.damage(6.0, caster);
                 target.setVelocity(caster.getLocation().getDirection().multiply(1.5));
                 sendMessage(caster, " dùng Tiếng Gáy Sonic!");
+                break;
+
+            // --- SKILL MỚI ---
+
+            case 4: // Hồi Phục (Healing)
+                world.playSound(caster.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 2f);
+                world.spawnParticle(Particle.HEART, caster.getLocation().add(0, 1, 0), 5);
+
+                double maxHP = caster.getAttribute(Attribute.MAX_HEALTH).getValue();
+                double newHP = Math.min(maxHP, caster.getHealth() + 8.0); // Hồi 4 tim
+                caster.setHealth(newHP);
+
+                sendMessage(caster, " tự Hồi Phục!");
+                break;
+
+            case 5: // Phun Lửa (Fire Breath)
+                world.playSound(caster.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.8f, 1f);
+                world.spawnParticle(Particle.FLAME, target.getLocation(), 10, 0.2, 0.5, 0.2, 0.05);
+                target.setFireTicks(60); // Cháy 3 giây
+                target.damage(2.0, caster);
+                sendMessage(caster, " phun Lửa!");
+                break;
+
+            case 6: // Hút Hồn (Life Steal)
+                world.playSound(caster.getLocation(), Sound.ENTITY_WITCH_DRINK, 0.8f, 0.5f);
+                // Hiệu ứng hút máu từ địch về mình
+                world.spawnParticle(Particle.SOUL_FIRE_FLAME, target.getLocation(), 10);
+                world.spawnParticle(Particle.HEART, caster.getLocation(), 3);
+
+                target.damage(3.0, caster); // Trừ máu địch
+                double stealHP = Math.min(caster.getAttribute(Attribute.MAX_HEALTH).getValue(), caster.getHealth() + 3.0);
+                caster.setHealth(stealHP); // Cộng máu mình
+
+                sendMessage(caster, " dùng Hút Hồn!");
+                break;
+
+            case 7: // Cú Mổ Độc (Poison Peck)
+                world.playSound(caster.getLocation(), Sound.ENTITY_SPIDER_STEP, 1f, 0.5f);
+                // Particle màu xanh lá cây (Happy Villager là ngôi sao xanh)
+                world.spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 0.5, 0), 10);
+                target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 0)); // Độc I trong 3s
+                target.damage(2.0, caster);
+                sendMessage(caster, " tung Cú Mổ Độc!");
                 break;
         }
     }
@@ -262,11 +309,11 @@ public class GameManager {
         c.getWorld().sendMessage(c.customName().append(Component.text(action).color(NamedTextColor.YELLOW)));
     }
 
-    // --- 5. END & PAYOUT (SỬA LỖI HOÀN TIỀN) ---
+    // --- 5. END & PAYOUT ---
     public void endFight() {
-        // QUAN TRỌNG: Không kiểm tra isRunning nữa.
-        // Cứ còn tiền trong danh sách cược là hoàn trả hết (vì chưa trả thưởng)
-        refundBets();
+        if (isRunning || (!redBets.isEmpty() || !blueBets.isEmpty())) {
+            refundBets();
+        }
 
         isRunning = false; canBet = false;
         if (skillTask != null) skillTask.cancel();
@@ -278,7 +325,6 @@ public class GameManager {
             entry.getKey().getBlock().setBlockData(entry.getValue());
         }
         backupBlocks.clear(); arenaCenter = null;
-        redBets.clear(); blueBets.clear();
         Bukkit.broadcast(Component.text("Sân đấu đã đóng.").color(NamedTextColor.GREEN));
     }
 
@@ -286,27 +332,22 @@ public class GameManager {
     private void refundBets() {
         Economy eco = CockfightPlugin.getEconomy();
         if (eco == null) return;
-
-        // Nếu cả 2 map đều trống (đã trả thưởng xong hoặc không ai cược) -> Không làm gì
         if (redBets.isEmpty() && blueBets.isEmpty()) return;
 
         boolean refunded = false;
 
-        // Hoàn tiền đội Đỏ
         for (Map.Entry<UUID, Double> entry : redBets.entrySet()) {
             OfflinePlayer p = Bukkit.getOfflinePlayer(entry.getKey());
             eco.depositPlayer(p, entry.getValue());
             refunded = true;
         }
 
-        // Hoàn tiền đội Xanh
         for (Map.Entry<UUID, Double> entry : blueBets.entrySet()) {
             OfflinePlayer p = Bukkit.getOfflinePlayer(entry.getKey());
             eco.depositPlayer(p, entry.getValue());
             refunded = true;
         }
 
-        // Sau khi hoàn tiền xong thì xóa sạch danh sách để tránh hoàn tiền lần 2
         redBets.clear();
         blueBets.clear();
 
@@ -356,7 +397,6 @@ public class GameManager {
         } else {
             Bukkit.broadcast(Component.text("--- TRẢ THƯỞNG (Phí sàn 5%) ---").color(NamedTextColor.GOLD));
 
-            // TRẢ NGƯỜI THẮNG
             for (Map.Entry<UUID, Double> entry : winners.entrySet()) {
                 UUID uid = entry.getKey();
                 double myBet = entry.getValue();
@@ -379,7 +419,6 @@ public class GameManager {
             }
         }
 
-        // AN ỦI NGƯỜI THUA
         for (UUID uid : losers.keySet()) {
             OfflinePlayer p = Bukkit.getOfflinePlayer(uid);
             if (p.isOnline() && p.getPlayer() != null) {
@@ -388,8 +427,6 @@ public class GameManager {
             }
         }
 
-        // QUAN TRỌNG: Xóa sổ sách sau khi đã trả thưởng
-        // Điều này đảm bảo khi gọi endFight() sau đó, nó thấy list rỗng và KHÔNG hoàn tiền nữa
         redBets.clear();
         blueBets.clear();
     }
