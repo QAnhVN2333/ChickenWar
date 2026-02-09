@@ -1,17 +1,19 @@
-name: Cockfight
-version: 2.2
-main: com.example.cockfight.CockfightPlugin
+name: ChickenWar
+version: 3.1
+main: com.example.chickenwar.ChickenWarPlugin
 api-version: '1.21'
-description: Minigame Da Ga dinh cao.
+description: Dai chien ga dinh cao.
 author: YourName
-# Thêm dòng này để server biết plugin này cần Vault mới chạy được
 depend: [Vault]
 commands:
-  cockfight:
+  chickenwar:
     description: Lenh quan ly dau truong ga
-    usage: /cockfight <build|start|end|reload|restart|bet>
-    permission: cockfight.admin
+    aliases: [cw]
+    usage: /cw <build|start|end|reload|restart|bet>
 permissions:
-  cockfight.admin:
-    description: Cho phep su dung lenh cockfight
+  chickenwar.admin:
+    description: Quyen quan ly tran dau (Build, Start, End...)
     default: op
+  chickenwar.bet:
+    description: Quyen dat cuoc
+    default: true

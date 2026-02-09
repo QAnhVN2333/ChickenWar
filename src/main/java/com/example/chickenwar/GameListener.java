@@ -1,4 +1,4 @@
-package com.example.cockfight;
+package com.example.chickenwar;
 
 import org.bukkit.entity.Chicken;
 import org.bukkit.event.EventHandler;

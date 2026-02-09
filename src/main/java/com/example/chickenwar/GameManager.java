@@ -1,4 +1,4 @@
-package com.example.cockfight;
+package com.example.chickenwar;
 
 import com.destroystokyo.paper.entity.ai.Goal;
 import com.destroystokyo.paper.entity.ai.GoalKey;
@@ -9,6 +9,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Chicken;
@@ -24,28 +25,26 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 
 public class GameManager {
-    private final CockfightPlugin plugin;
+    private final ChickenWarPlugin plugin;
     private final Map<Location, BlockData> backupBlocks = new HashMap<>();
     private Location arenaCenter;
-    private Chicken chicken1; // Red
-    private Chicken chicken2; // Blue
+    private Chicken chicken1;
+    private Chicken chicken2;
     private boolean isRunning = false;
     private boolean canBet = false;
     private BukkitRunnable skillTask;
     private final Random random = new Random();
 
-    // --- HỆ THỐNG CƯỢC ---
     private final Map<UUID, Double> redBets = new HashMap<>();
     private final Map<UUID, Double> blueBets = new HashMap<>();
 
-    public GameManager(CockfightPlugin plugin) {
+    public GameManager(ChickenWarPlugin plugin) {
         this.plugin = plugin;
     }
 
-    // --- 1. BUILD ARENA ---
     public void buildArena(Location center) {
         if (!backupBlocks.isEmpty()) {
-            center.getWorld().sendMessage(Component.text("Sân đấu đang hoạt động! /cockfight restart để làm mới.").color(NamedTextColor.RED));
+            center.getWorld().sendMessage(Component.text("Sân đấu đang hoạt động! /cw restart để làm mới.").color(NamedTextColor.RED));
             return;
         }
         this.arenaCenter = center;
@@ -70,15 +69,14 @@ public class GameManager {
             }
         }
         spawnFighters(center);
-
         canBet = true;
         redBets.clear();
         blueBets.clear();
 
         Bukkit.broadcast(Component.text("========================================").color(NamedTextColor.GOLD));
-        Bukkit.broadcast(Component.text("SÀN ĐẤU ĐÃ MỞ! ĐẶT CƯỢC NGAY!").color(NamedTextColor.GREEN));
-        Bukkit.broadcast(Component.text("Gõ: /cockfight bet red <tiền>").color(NamedTextColor.RED));
-        Bukkit.broadcast(Component.text("Gõ: /cockfight bet blue <tiền>").color(NamedTextColor.BLUE));
+        Bukkit.broadcast(Component.text("SÀN ĐẤU CHICKEN WAR ĐÃ MỞ!").color(NamedTextColor.GREEN));
+        Bukkit.broadcast(Component.text("Gõ: /cw bet red <tiền>").color(NamedTextColor.RED));
+        Bukkit.broadcast(Component.text("Gõ: /cw bet blue <tiền>").color(NamedTextColor.BLUE));
         Bukkit.broadcast(Component.text("========================================").color(NamedTextColor.GOLD));
     }
 
@@ -102,27 +100,23 @@ public class GameManager {
         return c;
     }
 
-    // --- 2. BETTING SYSTEM ---
     public boolean placeBet(Player player, String side, double amount) {
-        Economy eco = CockfightPlugin.getEconomy();
+        Economy eco = ChickenWarPlugin.getEconomy();
         if (eco == null) {
-            player.sendMessage(Component.text("Server chưa cài đặt hệ thống tiền tệ!").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Server chưa cài đặt Vault!").color(NamedTextColor.RED));
             return false;
         }
-
         if (!canBet) {
-            player.sendMessage(Component.text("Đã khóa sổ! Không thể đặt cược lúc này.").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Đã khóa sổ!").color(NamedTextColor.RED));
             return false;
         }
-
         if (!eco.has(player, amount)) {
-            player.sendMessage(Component.text("Bạn không đủ tiền!").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Không đủ tiền!").color(NamedTextColor.RED));
             return false;
         }
-
         if ((side.equalsIgnoreCase("red") && blueBets.containsKey(player.getUniqueId())) ||
                 (side.equalsIgnoreCase("blue") && redBets.containsKey(player.getUniqueId()))) {
-            player.sendMessage(Component.text("Bạn chỉ được chọn 1 phe thôi!").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Chỉ được chọn 1 phe!").color(NamedTextColor.RED));
             return false;
         }
 
@@ -131,10 +125,10 @@ public class GameManager {
         String betInfo;
         if (side.equalsIgnoreCase("red")) {
             redBets.put(player.getUniqueId(), redBets.getOrDefault(player.getUniqueId(), 0.0) + amount);
-            betInfo = "§cĐỎ (RED)";
+            betInfo = "§cĐỎ";
         } else {
             blueBets.put(player.getUniqueId(), blueBets.getOrDefault(player.getUniqueId(), 0.0) + amount);
-            betInfo = "§9XANH (BLUE)";
+            betInfo = "§9XANH";
         }
 
         double totalRed = redBets.values().stream().mapToDouble(Double::doubleValue).sum();
@@ -142,33 +136,28 @@ public class GameManager {
 
         Bukkit.broadcast(Component.text("➤ ").color(NamedTextColor.GOLD)
                 .append(player.displayName())
-                .append(Component.text(" đã cược ").color(NamedTextColor.YELLOW))
+                .append(Component.text(" cược ").color(NamedTextColor.YELLOW))
                 .append(Component.text(Math.round(amount) + "$").color(NamedTextColor.GREEN))
                 .append(Component.text(" vào " + betInfo))
-                .append(Component.text(" | Tỉ số tiền: §c" + Math.round(totalRed) + "$ §fvs §9" + Math.round(totalBlue) + "$"))
+                .append(Component.text(" | Tỉ lệ: §c" + Math.round(totalRed) + "$ §fvs §9" + Math.round(totalBlue) + "$"))
         );
-
         return true;
     }
 
-    // --- 3. START FIGHT ---
     public void startFight() {
         if (chicken1 == null || chicken2 == null || chicken1.isDead() || chicken2.isDead()) {
             if (arenaCenter != null && (chicken1 == null || chicken1.isDead())) spawnFighters(arenaCenter);
             else return;
         }
-
         isRunning = true;
         canBet = false;
 
         double totalRed = redBets.values().stream().mapToDouble(Double::doubleValue).sum();
         double totalBlue = blueBets.values().stream().mapToDouble(Double::doubleValue).sum();
 
-        Bukkit.broadcast(Component.text("====== KHÓA SỔ CƯỢC ======").color(NamedTextColor.GOLD));
-        Bukkit.broadcast(Component.text("Tổng tiền Đội Đỏ:  ").color(NamedTextColor.RED).append(Component.text(Math.round(totalRed) + "$").color(NamedTextColor.YELLOW)));
-        Bukkit.broadcast(Component.text("Tổng tiền Đội Xanh: ").color(NamedTextColor.BLUE).append(Component.text(Math.round(totalBlue) + "$").color(NamedTextColor.YELLOW)));
-        Bukkit.broadcast(Component.text("Tổng Quỹ (Jackpot): ").color(NamedTextColor.LIGHT_PURPLE).append(Component.text(Math.round(totalRed + totalBlue) + "$").color(NamedTextColor.GREEN)));
-        Bukkit.broadcast(Component.text("==========================").color(NamedTextColor.GOLD));
+        Bukkit.broadcast(Component.text("====== BẮT ĐẦU ======").color(NamedTextColor.GOLD));
+        Bukkit.broadcast(Component.text("Quỹ Đỏ:  ").color(NamedTextColor.RED).append(Component.text(Math.round(totalRed) + "$").color(NamedTextColor.YELLOW)));
+        Bukkit.broadcast(Component.text("Quỹ Xanh: ").color(NamedTextColor.BLUE).append(Component.text(Math.round(totalBlue) + "$").color(NamedTextColor.YELLOW)));
 
         setupWarrior(chicken1, chicken2);
         setupWarrior(chicken2, chicken1);
@@ -177,35 +166,36 @@ public class GameManager {
 
     public void restartMatch() {
         if (backupBlocks.isEmpty() || arenaCenter == null) return;
-
         if (isRunning) refundBets();
 
         isRunning = false;
         if (skillTask != null) skillTask.cancel();
         if (chicken1 != null) chicken1.remove();
         if (chicken2 != null) chicken2.remove();
-
         redBets.clear();
         blueBets.clear();
         canBet = true;
 
         spawnFighters(arenaCenter);
-        Bukkit.broadcast(Component.text("Đã khởi động lại. Mời đặt cược lại!").color(NamedTextColor.GREEN));
+        Bukkit.broadcast(Component.text("Đã khởi động lại ChickenWar!").color(NamedTextColor.GREEN));
     }
 
     private void setupWarrior(Chicken self, Chicken target) {
         self.setAI(true);
         self.removePotionEffect(PotionEffectType.RESISTANCE);
         double maxHealth = plugin.getConfig().getDouble("chicken-health", 100.0);
-        var hpAttr = self.getAttribute(Attribute.MAX_HEALTH);
-        if (hpAttr != null) hpAttr.setBaseValue(maxHealth);
+
+        AttributeInstance hpAttr = self.getAttribute(Attribute.MAX_HEALTH);
+        if (hpAttr != null) {
+            hpAttr.setBaseValue(maxHealth);
+        }
         self.setHealth(maxHealth);
+
         Bukkit.getMobGoals().removeGoal(self, VanillaGoal.PANIC);
-        Bukkit.getMobGoals().addGoal(self, 1, new CockfightAttackGoal(self, plugin));
+        Bukkit.getMobGoals().addGoal(self, 1, new ChickenWarAttackGoal(self, plugin));
         self.setTarget(target);
     }
 
-    // --- 4. SKILL SYSTEM (CẬP NHẬT 8 SKILL) ---
     private void startSkillScheduler() {
         skillTask = new BukkitRunnable() {
             @Override
@@ -224,96 +214,96 @@ public class GameManager {
     private void tryCastSkill(Chicken caster, LivingEntity target) {
         if (random.nextDouble() > plugin.getConfig().getDouble("skill-chance", 0.5)) return;
 
-        // Random từ 0 đến 7 (8 loại skill)
         int skillType = random.nextInt(8);
         World world = caster.getWorld();
+
+        // --- FIX NPE: Lấy Max Health an toàn MỘT LẦN ở đây ---
+        double maxHP = 20.0;
+        AttributeInstance attr = caster.getAttribute(Attribute.MAX_HEALTH);
+        if (attr != null) {
+            maxHP = attr.getValue();
+        }
 
         switch (skillType) {
             case 0: // Lôi Điểu
                 world.playSound(caster.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.8f, 2f);
                 world.spawnParticle(Particle.CRIT, target.getLocation().add(0, 0.5, 0), 10);
                 target.damage(3.0, caster);
-                sendMessage(caster, " tung Lôi Điểu!");
+                sendActionBar(caster, "⚡ LÔI ĐIỂU ⚡");
                 break;
-
             case 1: // Cú Đá Xoáy
                 world.playSound(caster.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 2f);
                 world.spawnParticle(Particle.CLOUD, target.getLocation(), 10, 0.2, 0.2, 0.2, 0.1);
                 target.setVelocity(target.getLocation().toVector().subtract(caster.getLocation().toVector()).normalize().multiply(1.0).setY(0.8));
                 target.damage(4.0, caster);
-                sendMessage(caster, " tung Cú Đá Xoáy!");
+                sendActionBar(caster, "🌪 CÚ ĐÁ XOÁY 🌪");
                 break;
-
             case 2: // Bom Trứng
                 world.playSound(caster.getLocation(), Sound.ENTITY_EGG_THROW, 1f, 0.5f);
                 world.spawnParticle(Particle.EXPLOSION_EMITTER, target.getLocation(), 1);
                 world.createExplosion(target.getLocation(), 0F, false);
                 target.damage(5.0, caster);
-                sendMessage(caster, " ném Bom Trứng!");
+                sendActionBar(caster, "🥚 BOM TRỨNG 🥚");
                 break;
-
             case 3: // Tiếng Gáy Sonic
                 world.playSound(caster.getLocation(), Sound.ENTITY_WARDEN_SONIC_BOOM, 0.5f, 1.5f);
                 world.spawnParticle(Particle.SWEEP_ATTACK, caster.getLocation().add(0, 0.5, 0), 1);
                 target.damage(6.0, caster);
                 target.setVelocity(caster.getLocation().getDirection().multiply(1.5));
-                sendMessage(caster, " dùng Tiếng Gáy Sonic!");
+                sendActionBar(caster, "🔊 TIẾNG GÁY SONIC 🔊");
                 break;
-
-            // --- SKILL MỚI ---
-
-            case 4: // Hồi Phục (Healing)
+            case 4: // Hồi Phục
                 world.playSound(caster.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.5f, 2f);
                 world.spawnParticle(Particle.HEART, caster.getLocation().add(0, 1, 0), 5);
-
-                double maxHP = caster.getAttribute(Attribute.MAX_HEALTH).getValue();
-                double newHP = Math.min(maxHP, caster.getHealth() + 8.0); // Hồi 4 tim
-                caster.setHealth(newHP);
-
-                sendMessage(caster, " tự Hồi Phục!");
+                // Dùng biến maxHP an toàn, KHÔNG gọi .getValue() nữa
+                caster.setHealth(Math.min(maxHP, caster.getHealth() + 8.0));
+                sendActionBar(caster, "❤ HỒI PHỤC ❤");
                 break;
-
-            case 5: // Phun Lửa (Fire Breath)
+            case 5: // Phun Lửa
                 world.playSound(caster.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 0.8f, 1f);
                 world.spawnParticle(Particle.FLAME, target.getLocation(), 10, 0.2, 0.5, 0.2, 0.05);
-                target.setFireTicks(60); // Cháy 3 giây
+                target.setFireTicks(60);
                 target.damage(2.0, caster);
-                sendMessage(caster, " phun Lửa!");
+                sendActionBar(caster, "🔥 PHUN LỬA 🔥");
                 break;
-
-            case 6: // Hút Hồn (Life Steal)
+            case 6: // Hút Hồn
                 world.playSound(caster.getLocation(), Sound.ENTITY_WITCH_DRINK, 0.8f, 0.5f);
-                // Hiệu ứng hút máu từ địch về mình
                 world.spawnParticle(Particle.SOUL_FIRE_FLAME, target.getLocation(), 10);
                 world.spawnParticle(Particle.HEART, caster.getLocation(), 3);
-
-                target.damage(3.0, caster); // Trừ máu địch
-                double stealHP = Math.min(caster.getAttribute(Attribute.MAX_HEALTH).getValue(), caster.getHealth() + 3.0);
-                caster.setHealth(stealHP); // Cộng máu mình
-
-                sendMessage(caster, " dùng Hút Hồn!");
+                target.damage(3.0, caster);
+                // Dùng biến maxHP an toàn
+                caster.setHealth(Math.min(maxHP, caster.getHealth() + 3.0));
+                sendActionBar(caster, "👻 HÚT HỒN 👻");
                 break;
-
-            case 7: // Cú Mổ Độc (Poison Peck)
+            case 7: // Cú Mổ Độc
                 world.playSound(caster.getLocation(), Sound.ENTITY_SPIDER_STEP, 1f, 0.5f);
-                // Particle màu xanh lá cây (Happy Villager là ngôi sao xanh)
                 world.spawnParticle(Particle.HAPPY_VILLAGER, target.getLocation().add(0, 0.5, 0), 10);
-                target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 0)); // Độc I trong 3s
+                target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 0));
                 target.damage(2.0, caster);
-                sendMessage(caster, " tung Cú Mổ Độc!");
+                sendActionBar(caster, "☠ CÚ MỔ ĐỘC ☠");
                 break;
         }
     }
 
-    private void sendMessage(Chicken c, String action) {
-        c.getWorld().sendMessage(c.customName().append(Component.text(action).color(NamedTextColor.YELLOW)));
+    // --- FIX NPE: Action Bar an toàn ---
+    private void sendActionBar(Chicken c, String action) {
+        Component name = c.customName();
+        // Nếu tên null (hiếm khi xảy ra), dùng tên mặc định
+        if (name == null) {
+            name = Component.text("Gà Chiến").color(NamedTextColor.YELLOW);
+        }
+
+        Component msg = name
+                .append(Component.text(" dùng ").color(NamedTextColor.WHITE))
+                .append(Component.text(action).color(NamedTextColor.YELLOW));
+
+        for (Player p : c.getWorld().getPlayers()) {
+            p.sendActionBar(msg);
+        }
     }
 
-    // --- 5. END & PAYOUT ---
     public void endFight() {
-        if (isRunning || (!redBets.isEmpty() || !blueBets.isEmpty())) {
-            refundBets();
-        }
+        if (isRunning || (!redBets.isEmpty() || !blueBets.isEmpty())) refundBets();
 
         isRunning = false; canBet = false;
         if (skillTask != null) skillTask.cancel();
@@ -328,32 +318,22 @@ public class GameManager {
         Bukkit.broadcast(Component.text("Sân đấu đã đóng.").color(NamedTextColor.GREEN));
     }
 
-    // --- HÀM HOÀN TIỀN (REFUND) ---
     private void refundBets() {
-        Economy eco = CockfightPlugin.getEconomy();
+        Economy eco = ChickenWarPlugin.getEconomy();
         if (eco == null) return;
         if (redBets.isEmpty() && blueBets.isEmpty()) return;
 
         boolean refunded = false;
-
         for (Map.Entry<UUID, Double> entry : redBets.entrySet()) {
-            OfflinePlayer p = Bukkit.getOfflinePlayer(entry.getKey());
-            eco.depositPlayer(p, entry.getValue());
+            eco.depositPlayer(Bukkit.getOfflinePlayer(entry.getKey()), entry.getValue());
             refunded = true;
         }
-
         for (Map.Entry<UUID, Double> entry : blueBets.entrySet()) {
-            OfflinePlayer p = Bukkit.getOfflinePlayer(entry.getKey());
-            eco.depositPlayer(p, entry.getValue());
+            eco.depositPlayer(Bukkit.getOfflinePlayer(entry.getKey()), entry.getValue());
             refunded = true;
         }
-
-        redBets.clear();
-        blueBets.clear();
-
-        if (refunded) {
-            Bukkit.broadcast(Component.text("⚠ Trận đấu bị hủy! Đã hoàn tiền cược cho tất cả mọi người.").color(NamedTextColor.RED));
-        }
+        redBets.clear(); blueBets.clear();
+        if (refunded) Bukkit.broadcast(Component.text("⚠ Đã hoàn tiền cược!").color(NamedTextColor.RED));
     }
 
     public void forceEnd() { endFight(); }
@@ -361,18 +341,13 @@ public class GameManager {
 
     public void onChickenDeath(Entity deadChicken) {
         if (!isRunning) return;
-
         String winnerSide = "";
         Chicken winnerChicken = null;
-
         if (deadChicken.equals(chicken1)) {
-            winnerSide = "blue";
-            winnerChicken = chicken2;
+            winnerSide = "blue"; winnerChicken = chicken2;
         } else if (deadChicken.equals(chicken2)) {
-            winnerSide = "red";
-            winnerChicken = chicken1;
+            winnerSide = "red"; winnerChicken = chicken1;
         }
-
         if (winnerChicken != null) {
             announceWinner(winnerChicken);
             processPayout(winnerSide);
@@ -380,79 +355,56 @@ public class GameManager {
     }
 
     private void processPayout(String winnerSide) {
-        Economy eco = CockfightPlugin.getEconomy();
+        Economy eco = ChickenWarPlugin.getEconomy();
         if (eco == null) return;
 
         double totalRed = redBets.values().stream().mapToDouble(Double::doubleValue).sum();
         double totalBlue = blueBets.values().stream().mapToDouble(Double::doubleValue).sum();
         double totalPool = totalRed + totalBlue;
-
         Map<UUID, Double> winners = winnerSide.equals("red") ? redBets : blueBets;
         Map<UUID, Double> losers = winnerSide.equals("red") ? blueBets : redBets;
-
         double totalWinningBets = winnerSide.equals("red") ? totalRed : totalBlue;
 
         if (winners.isEmpty()) {
-            Bukkit.broadcast(Component.text("Nhà cái thắng toàn bộ (Không ai đặt bên thắng)!").color(NamedTextColor.GRAY));
+            Bukkit.broadcast(Component.text("Nhà cái thắng toàn bộ!").color(NamedTextColor.GRAY));
         } else {
-            Bukkit.broadcast(Component.text("--- TRẢ THƯỞNG (Phí sàn 5%) ---").color(NamedTextColor.GOLD));
-
+            Bukkit.broadcast(Component.text("--- TRẢ THƯỞNG (Phí 5%) ---").color(NamedTextColor.GOLD));
             for (Map.Entry<UUID, Double> entry : winners.entrySet()) {
-                UUID uid = entry.getKey();
-                double myBet = entry.getValue();
-
-                double grossPayout = 0;
-                if (totalWinningBets > 0) {
-                    grossPayout = (myBet / totalWinningBets) * totalPool;
-                }
-                double finalPayout = grossPayout * 0.95;
-
-                OfflinePlayer p = Bukkit.getOfflinePlayer(uid);
-                eco.depositPlayer(p, finalPayout);
-
-                if (p.isOnline() && p.getPlayer() != null) {
-                    p.getPlayer().sendMessage(Component.text("Chúc mừng! Bạn nhận được: ")
-                            .color(NamedTextColor.GREEN)
-                            .append(Component.text(Math.round(finalPayout) + "$").color(NamedTextColor.GOLD))
-                            .append(Component.text(" (Đã trừ 5% phí)").color(NamedTextColor.GRAY)));
-                }
+                double payout = (totalWinningBets > 0) ? (entry.getValue() / totalWinningBets) * totalPool : 0;
+                double finalPayout = payout * 0.95;
+                eco.depositPlayer(Bukkit.getOfflinePlayer(entry.getKey()), finalPayout);
             }
         }
 
         for (UUID uid : losers.keySet()) {
             OfflinePlayer p = Bukkit.getOfflinePlayer(uid);
             if (p.isOnline() && p.getPlayer() != null) {
-                p.getPlayer().sendMessage(Component.text("Rất tiếc! Chiến kê bạn chọn đã thua.").color(NamedTextColor.RED));
-                p.getPlayer().sendMessage(Component.text("Cảm ơn đã tham gia và chúc may mắn lần sau!").color(NamedTextColor.GRAY));
+                p.getPlayer().sendMessage(Component.text("Thua rồi! Chúc may mắn lần sau.").color(NamedTextColor.GRAY));
             }
         }
-
-        redBets.clear();
-        blueBets.clear();
+        redBets.clear(); blueBets.clear();
     }
 
     private void announceWinner(Chicken winner) {
         isRunning = false; canBet = false;
         if (skillTask != null) skillTask.cancel();
-
         Bukkit.broadcast(Component.text("==========================").color(NamedTextColor.GOLD));
         Bukkit.broadcast(winner.customName().append(Component.text(" CHIẾN THẮNG!").color(NamedTextColor.GOLD)));
         Bukkit.broadcast(Component.text("==========================").color(NamedTextColor.GOLD));
-
         winner.getWorld().spawnParticle(Particle.FIREWORK, winner.getLocation(), 50, 0.5, 0.5, 0.5, 0.1);
         winner.getWorld().playSound(winner.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1f, 1f);
     }
 
-    public static class CockfightAttackGoal implements Goal<Chicken> {
+    public static class ChickenWarAttackGoal implements Goal<Chicken> {
         private final Chicken chicken;
-        private final CockfightPlugin plugin;
+        private final ChickenWarPlugin plugin;
         private final GoalKey<Chicken> key;
         private long lastAttackTime = 0;
 
-        public CockfightAttackGoal(Chicken chicken, CockfightPlugin plugin) {
+        public ChickenWarAttackGoal(Chicken chicken, ChickenWarPlugin plugin) {
             this.chicken = chicken;
             this.plugin = plugin;
-            this.key = GoalKey.of(Chicken.class, new NamespacedKey("cockfight", "attack"));
+            this.key = GoalKey.of(Chicken.class, new NamespacedKey("chickenwar", "attack"));
         }
         @Override
         public boolean shouldActivate() { return chicken.getTarget() != null && !chicken.getTarget().isDead(); }

@@ -1,4 +1,4 @@
-package com.example.cockfight;
+package com.example.chickenwar;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -8,12 +8,12 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-public class CockfightCommand implements CommandExecutor {
+public class ChickenWarCommand implements CommandExecutor {
 
-    private final CockfightPlugin plugin;
+    private final ChickenWarPlugin plugin;
     private final GameManager gameManager;
 
-    public CockfightCommand(CockfightPlugin plugin, GameManager gameManager) {
+    public ChickenWarCommand(ChickenWarPlugin plugin, GameManager gameManager) {
         this.plugin = plugin;
         this.gameManager = gameManager;
     }
@@ -47,9 +47,8 @@ public class CockfightCommand implements CommandExecutor {
                 gameManager.endFight();
                 break;
             case "bet":
-                // Cú pháp: /cockfight bet <red/blue> <amount>
                 if (args.length < 3) {
-                    player.sendMessage(Component.text("Sai cú pháp! Dùng: /cockfight bet <red/blue> <số tiền>").color(NamedTextColor.RED));
+                    player.sendMessage(Component.text("Sai cú pháp! /cw bet <red/blue> <tiền>").color(NamedTextColor.RED));
                     return true;
                 }
                 String side = args[1];
@@ -62,16 +61,11 @@ public class CockfightCommand implements CommandExecutor {
                     return true;
                 }
 
-                if (!side.equalsIgnoreCase("red") && !side.equalsIgnoreCase("blue")) {
-                    player.sendMessage(Component.text("Chỉ được chọn red (đỏ) hoặc blue (xanh)!").color(NamedTextColor.RED));
-                    return true;
-                }
-
                 gameManager.placeBet(player, side, amount);
                 break;
 
             default:
-                player.sendMessage(Component.text("Lệnh không tồn tại.").color(NamedTextColor.RED));
+                player.sendMessage(Component.text("Sai cú pháp! /cw <build|start|restart|end|bet|reload>").color(NamedTextColor.RED));
         }
         return true;
     }
