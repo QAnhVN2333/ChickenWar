@@ -1,5 +1,6 @@
 package com.example.chickenwar;
 
+import com.example.chickenwar.managers.GameManager;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -12,34 +13,39 @@ public class ChickenWarPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        // 1. Setup Vault Economy
         if (!setupEconomy()) {
-            getLogger().warning("⚠ Không tìm thấy Vault! Tính năng cá cược sẽ bị tắt.");
+            getLogger().warning("⚠ Không tìm thấy Vault hoặc plugin kinh tế! Tính năng cá cược sẽ bị tắt.");
         } else {
-            getLogger().info("✔ Đã kết nối hệ thống tiền tệ.");
+            getLogger().info("✔ Đã kết nối hệ thống tiền tệ thành công.");
         }
 
+        // 2. Load Config
         saveDefaultConfig();
+
+        // 3. Khởi tạo Game Manager (Nhạc trưởng)
         this.gameManager = new GameManager(this);
 
-        // --- FIX NPE: Kiểm tra lệnh trước khi đăng ký ---
-        PluginCommand command = getCommand("chickenwar");
-        if (command != null) {
-            command.setExecutor(new ChickenWarCommand(this, gameManager));
+        // 4. Đăng ký lệnh (Kiểm tra null để tránh lỗi)
+        PluginCommand cmd = getCommand("chickenwar");
+        if (cmd != null) {
+            cmd.setExecutor(new ChickenWarCommand(this, gameManager));
         } else {
-            getLogger().severe("LỖI NGHIÊM TRỌNG: Không tìm thấy lệnh 'chickenwar' trong plugin.yml!");
+            getLogger().severe("LỖI: Không tìm thấy lệnh 'chickenwar' trong plugin.yml!");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
+        // 5. Đăng ký Sự kiện
         getServer().getPluginManager().registerEvents(new GameListener(gameManager), this);
 
-        getLogger().info("ChickenWar 3.0 (Safe Version) da san sang!");
+        getLogger().info("ChickenWar 3.1 (SOLID Architecture) da san sang!");
     }
 
     @Override
     public void onDisable() {
         if (gameManager != null) {
-            gameManager.forceEnd();
+            gameManager.forceEnd(); // Dọn dẹp sân bãi và hoàn tiền nếu server tắt
         }
     }
 

@@ -18,4 +18,12 @@ public class MessageUtils {
     public static void sendActionBar(Player player, String message) {
         player.sendActionBar(Component.text(message));
     }
+
+    // --- HÀM MỚI ---
+    public static void broadcastActionBar(String message) {
+        Component comp = Component.text(message);
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            p.sendActionBar(comp);
+        }
+    }
 }

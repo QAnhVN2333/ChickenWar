@@ -1,6 +1,7 @@
 package com.example.chickenwar;
 
-import net.kyori.adventure.text.Component;
+import com.example.chickenwar.managers.GameManager;
+import com.example.chickenwar.utils.MessageUtils;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -20,53 +21,96 @@ public class ChickenWarCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
-        if (args.length == 0) return false;
-
-        if (args[0].equalsIgnoreCase("reload")) {
-            plugin.reloadConfig();
-            sender.sendMessage(Component.text("Đã reload config!").color(NamedTextColor.GREEN));
-            return true;
-        }
-
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Lệnh này chỉ dành cho người chơi.");
+            sender.sendMessage("Lệnh này chỉ dành cho người chơi (Ingame)!");
             return true;
         }
 
-        switch (args[0].toLowerCase()) {
+        // 1. Nếu không nhập gì -> Hiện hướng dẫn theo quyền
+        if (args.length == 0) {
+            showHelp(player);
+            return true;
+        }
+
+        String sub = args[0].toLowerCase();
+
+        // 2. Xử lý các lệnh
+        switch (sub) {
+            // --- LỆNH NGƯỜI CHƠI ---
+            case "bet":
+                if (!player.hasPermission("chickenwar.bet")) {
+                    MessageUtils.send(player, "Bạn không có quyền cá cược!", NamedTextColor.RED);
+                    return true;
+                }
+                if (args.length < 3) {
+                    MessageUtils.send(player, "Sai cú pháp! Dùng: /cw bet <red/blue> <tiền>", NamedTextColor.RED);
+                    return true;
+                }
+                try {
+                    double amount = Double.parseDouble(args[2]);
+                    if (amount <= 0) throw new NumberFormatException();
+
+                    gameManager.getBetManager().placeBet(player, args[1].toLowerCase(), amount);
+                } catch (NumberFormatException e) {
+                    MessageUtils.send(player, "Số tiền không hợp lệ!", NamedTextColor.RED);
+                }
+                break;
+
+            // --- LỆNH ADMIN ---
             case "build":
-                gameManager.buildArena(player.getLocation());
+                if (checkAdmin(player)) gameManager.buildAndInvite(player);
                 break;
             case "start":
-                gameManager.startFight();
+                if (checkAdmin(player)) gameManager.startFight(player);
                 break;
             case "restart":
-                gameManager.restartMatch();
+                if (checkAdmin(player)) gameManager.restartMatch();
                 break;
             case "end":
-                gameManager.endFight();
+                if (checkAdmin(player)) gameManager.endFight();
                 break;
-            case "bet":
-                if (args.length < 3) {
-                    player.sendMessage(Component.text("Sai cú pháp! /cw bet <red/blue> <tiền>").color(NamedTextColor.RED));
-                    return true;
+            case "reload":
+                if (checkAdmin(player)) {
+                    plugin.reloadConfig();
+                    MessageUtils.send(player, "Đã reload config thành công!", NamedTextColor.GREEN);
                 }
-                String side = args[1];
-                double amount;
-                try {
-                    amount = Double.parseDouble(args[2]);
-                    if (amount <= 0) throw new NumberFormatException();
-                } catch (NumberFormatException e) {
-                    player.sendMessage(Component.text("Số tiền không hợp lệ!").color(NamedTextColor.RED));
-                    return true;
-                }
-
-                gameManager.placeBet(player, side, amount);
                 break;
 
+            // --- LỆNH SAI ---
             default:
-                player.sendMessage(Component.text("Sai cú pháp! /cw <build|start|restart|end|bet|reload>").color(NamedTextColor.RED));
+                MessageUtils.send(player, "Lệnh không tồn tại!", NamedTextColor.RED);
+                showHelp(player); // Hiện lại hướng dẫn
+                break;
+        }
+
+        return true;
+    }
+
+    // --- HÀM KIỂM TRA QUYỀN ADMIN NHANH ---
+    private boolean checkAdmin(Player player) {
+        if (!player.hasPermission("chickenwar.admin")) {
+            MessageUtils.send(player, "Bạn không có quyền Admin để dùng lệnh này.", NamedTextColor.RED);
+            return false;
         }
         return true;
+    }
+
+    // --- HÀM HIỂN THỊ HƯỚNG DẪN THÔNG MINH ---
+    private void showHelp(Player player) {
+        MessageUtils.send(player, "============== HƯỚNG DẪN CHICKEN WAR ==============", NamedTextColor.GOLD);
+
+        // Luôn hiện lệnh cá cược (vì ai cũng cần dùng)
+        MessageUtils.send(player, "➤ /cw bet <red/blue> <tiền>: Đặt cược cho Đỏ hoặc Xanh", NamedTextColor.GREEN);
+
+        // Chỉ hiện lệnh quản lý nếu là Admin
+        if (player.hasPermission("chickenwar.admin")) {
+            MessageUtils.send(player, "------------------ ADMIN ------------------", NamedTextColor.GRAY);
+            MessageUtils.send(player, "➤ /cw build: Xây đấu trường & Mở cược", NamedTextColor.YELLOW);
+            MessageUtils.send(player, "➤ /cw start: Bắt đầu trận đấu", NamedTextColor.YELLOW);
+            MessageUtils.send(player, "➤ /cw restart: Khởi động lại trận mới", NamedTextColor.YELLOW);
+            MessageUtils.send(player, "➤ /cw end: Dọn sân & Kết thúc", NamedTextColor.YELLOW);
+            MessageUtils.send(player, "➤ /cw reload: Nạp lại file config", NamedTextColor.YELLOW);
+        }
+        MessageUtils.send(player, "===================================================", NamedTextColor.GOLD);
     }
 }

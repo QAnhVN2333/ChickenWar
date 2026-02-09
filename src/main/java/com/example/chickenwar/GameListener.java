@@ -1,5 +1,6 @@
 package com.example.chickenwar;
 
+import com.example.chickenwar.managers.GameManager;
 import org.bukkit.entity.Chicken;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,11 +16,10 @@ public class GameListener implements Listener {
 
     @EventHandler
     public void onDeath(EntityDeathEvent event) {
-        if (event.getEntity() instanceof Chicken) {
-            gameManager.onChickenDeath(event.getEntity());
+        // Chỉ quan tâm nếu thực thể chết là Gà
+        if (event.getEntity() instanceof Chicken chicken) {
+            // Chuyển logic xử lý sang cho GameManager
+            gameManager.onChickenDeath(chicken);
         }
     }
-
-    // Đã xóa phần onAttack setDamage(4.0) để tránh xung đột với Skill
-    // AI của GameManager đã tự xử lý việc gây damage rồi.
 }
