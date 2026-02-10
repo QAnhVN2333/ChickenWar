@@ -5,7 +5,6 @@ import com.example.chickenwar.utils.MessageUtils;
 import net.milkbowl.vault.economy.Economy;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
@@ -15,32 +14,44 @@ import java.util.UUID;
 public class BetManager {
     private final Map<UUID, Double> redBets = new HashMap<>();
     private final Map<UUID, Double> blueBets = new HashMap<>();
+
+    // Mặc định là FALSE (Đóng) -> Chưa có sàn thì không cược được
     private boolean bettingOpen = false;
 
     public void openBetting() {
         redBets.clear();
         blueBets.clear();
-        bettingOpen = true;
+        bettingOpen = true; // Mở cửa
     }
 
     public void closeBetting() {
-        bettingOpen = false;
+        bettingOpen = false; // Khóa cửa
     }
 
     public boolean isBettingOpen() { return bettingOpen; }
 
     public boolean placeBet(Player player, String side, double amount) {
+        // 1. KIỂM TRA TRẠNG THÁI CƯỢC
+        if (!bettingOpen) {
+            MessageUtils.send(player, "⛔ Cổng cược đang ĐÓNG! (Chưa có sàn đấu hoặc trận đã bắt đầu/kết thúc)", NamedTextColor.RED);
+            return false;
+        }
+
         Economy eco = ChickenWarPlugin.getEconomy();
-        if (eco == null) return false;
+        if (eco == null) {
+            MessageUtils.send(player, "Lỗi hệ thống tiền tệ!", NamedTextColor.RED);
+            return false;
+        }
 
         if (!eco.has(player, amount)) {
             MessageUtils.send(player, "Không đủ tiền!", NamedTextColor.RED);
             return false;
         }
 
+        // Kiểm tra xem đã cược bên kia chưa
         if ((side.equals("red") && blueBets.containsKey(player.getUniqueId())) ||
                 (side.equals("blue") && redBets.containsKey(player.getUniqueId()))) {
-            MessageUtils.send(player, "Chỉ được cược 1 bên!", NamedTextColor.RED);
+            MessageUtils.send(player, "Bạn chỉ được chọn một phe!", NamedTextColor.RED);
             return false;
         }
 
@@ -59,18 +70,19 @@ public class BetManager {
             sideColor = NamedTextColor.BLUE;
         }
 
-        // --- FIX: THÊM LẠI THÔNG BÁO TOÀN SERVER ---
         double totalRed = getTotalRed();
         double totalBlue = getTotalBlue();
 
         MessageUtils.broadcast("➤ " + player.getName() +
                 " đã cược §a" + Math.round(amount) + "$§f vào §" + (side.equals("red") ? "c" : "9") + sideName +
-                " §7(Tỉ lệ tiền: §c" + Math.round(totalRed) + " §7vs §9" + Math.round(totalBlue) + "§7)", NamedTextColor.YELLOW);
+                " §7(Tỉ lệ: §c" + Math.round(totalRed) + " §7vs §9" + Math.round(totalBlue) + "§7)", NamedTextColor.YELLOW);
 
         return true;
     }
 
     public void refundAll() {
+        closeBetting(); // Đảm bảo đóng cửa khi hoàn tiền
+
         Economy eco = ChickenWarPlugin.getEconomy();
         if (eco == null) return;
 
@@ -86,10 +98,12 @@ public class BetManager {
         redBets.clear();
         blueBets.clear();
 
-        if (refunded) MessageUtils.broadcast("⚠ Trận đấu hủy! Đã hoàn tiền cược.", NamedTextColor.RED);
+        if (refunded) MessageUtils.broadcast("⚠ Đã hoàn tiền cược cho tất cả mọi người.", NamedTextColor.RED);
     }
 
     public void processPayout(String winnerSide) {
+        closeBetting(); // Đảm bảo đóng cửa khi trả thưởng
+
         Economy eco = ChickenWarPlugin.getEconomy();
         if (eco == null) return;
 
@@ -102,7 +116,7 @@ public class BetManager {
         double totalWinningBets = winnerSide.equals("red") ? totalRed : totalBlue;
 
         if (winners.isEmpty()) {
-            MessageUtils.broadcast("Nhà cái ăn hết (Không ai thắng)!", NamedTextColor.GRAY);
+            MessageUtils.broadcast("Nhà cái thắng toàn bộ (Không ai đặt bên thắng)!", NamedTextColor.GRAY);
         } else {
             MessageUtils.broadcast("--- TRẢ THƯỞNG (Phí 5%) ---", NamedTextColor.GOLD);
             for (Map.Entry<UUID, Double> entry : winners.entrySet()) {
@@ -114,13 +128,13 @@ public class BetManager {
                 eco.depositPlayer(Bukkit.getOfflinePlayer(entry.getKey()), finalPayout);
 
                 Player p = Bukkit.getPlayer(entry.getKey());
-                if (p != null) MessageUtils.send(p, "Thắng cược: " + Math.round(finalPayout) + "$", NamedTextColor.GREEN);
+                if (p != null) MessageUtils.send(p, "Chúc mừng! Bạn nhận được: " + Math.round(finalPayout) + "$", NamedTextColor.GREEN);
             }
         }
 
         for (UUID uid : losers.keySet()) {
             Player p = Bukkit.getPlayer(uid);
-            if (p != null) MessageUtils.send(p, "Bạn đã thua! Chúc may mắn lần sau.", NamedTextColor.GRAY);
+            if (p != null) MessageUtils.send(p, "Rất tiếc! Bạn đã thua cược.", NamedTextColor.GRAY);
         }
 
         redBets.clear();
