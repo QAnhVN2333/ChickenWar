@@ -1,11 +1,14 @@
-# Cấu hình Đấu Trường Gà
+# Cấu hình Máu và Tỉ lệ
+chicken-health: 60.0
+skill-chance: 0.75
+base-damage: 5.0
 
-# Lượng máu tối đa của chiến kê (Mặc định: 100.0 = 50 Tim)
-chicken-health: 100.0
-
-# Tỉ lệ tung skill mỗi lần kiểm tra (0.0 đến 1.0)
-# 0.5 nghĩa là 50% cơ hội tung chiêu mỗi giây
-skill-chance: 0.5
-
-# Sát thương cơ bản khi mổ (Mặc định: 4.0 = 2 Tim)
-base-damage: 4.0
+# Cấu hình Warp (Nơi diễn ra trận đấu)
+# Sử dụng lệnh /cw setwarp để tự động lưu tọa độ vào đây
+warp:
+  world: "world"
+  x: 0.0
+  y: 70.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0

@@ -1,5 +1,5 @@
 name: ChickenWar
-version: 3.1
+version: 4.1
 main: com.example.chickenwar.ChickenWarPlugin
 api-version: '1.21'
 description: Dai chien ga dinh cao.
@@ -7,13 +7,10 @@ author: YourName
 depend: [Vault]
 commands:
   chickenwar:
-    description: Lenh quan ly dau truong ga
+    description: Lenh chinh cua plugin
     aliases: [cw]
-    usage: /cw <build|start|end|reload|restart|bet>
+    usage: /cw help
 permissions:
   chickenwar.admin:
-    description: Quyen quan ly tran dau (Build, Start, End...)
+    description: Quyen Admin (Setwarp, Reload...)
     default: op
-  chickenwar.bet:
-    description: Quyen dat cuoc
-    default: true

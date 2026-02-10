@@ -15,7 +15,6 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import com.destroystokyo.paper.entity.ai.Goal;
@@ -41,64 +40,74 @@ public class GameManager {
         this.skillManager = new SkillManager(plugin);
     }
 
-    public void buildAndInvite(Player host) {
-        if (arenaManager.hasArena()) {
-            MessageUtils.send(host, "Sân đang hoạt động! Dùng /cw restart nếu muốn chơi lại.", NamedTextColor.RED);
+    // --- LOGIC XÂY VÀ MỜI GỌI (SỬA ĐỔI) ---
+    public void buildAndInvite(Player builder) {
+        // 1. Lấy thông tin Warp từ Config
+        String worldName = plugin.getConfig().getString("warp.world");
+        if (worldName == null) {
+            MessageUtils.send(builder, "Chưa thiết lập điểm Warp! Admin hãy dùng /cw setwarp.", NamedTextColor.RED);
             return;
         }
 
-        arenaManager.buildArena(host.getLocation());
+        // 2. Kiểm tra Player có đang ở đúng World không
+        if (!builder.getWorld().getName().equals(worldName)) {
+            MessageUtils.send(builder, "Bạn phải ở thế giới sự kiện (" + worldName + ") mới được xây! Gõ /cw để đến đó.", NamedTextColor.RED);
+            return;
+        }
+
+        // 3. Tạo Location từ Config
+        org.bukkit.World world = plugin.getServer().getWorld(worldName);
+        double x = plugin.getConfig().getDouble("warp.x");
+        double y = plugin.getConfig().getDouble("warp.y");
+        double z = plugin.getConfig().getDouble("warp.z");
+        Location warpLoc = new Location(world, x, y, z);
+
+        // 4. Gọi ArenaManager xây tại Warp Loc
+        if (arenaManager.hasArena()) {
+            MessageUtils.send(builder, "Sân đang hoạt động! Chỉ được phép tồn tại 1 sân đấu.", NamedTextColor.RED);
+            return;
+        }
+
+        // Truyền warpLoc thay vì builder.getLocation()
+        arenaManager.buildArena(warpLoc, builder.getUniqueId());
         betManager.openBetting();
 
         MessageUtils.broadcast("========================================", NamedTextColor.GOLD);
-        MessageUtils.broadcast("📢 LOA LOA: " + host.getName() + " ĐÃ TỔ CHỨC ĐẠI CHIẾN GÀ!", NamedTextColor.GREEN);
-        MessageUtils.broadcast("➤ Mời anh em tham gia đặt cược ngay!", NamedTextColor.YELLOW);
-        MessageUtils.broadcast("➤ /cw bet red <tiền> (Đặt Đội Đỏ)", NamedTextColor.RED);
-        MessageUtils.broadcast("➤ /cw bet blue <tiền> (Đặt Đội Xanh)", NamedTextColor.BLUE);
+        MessageUtils.broadcast("📢 ĐẠI CHIẾN GÀ ĐƯỢC TỔ CHỨC BỞI: " + builder.getName(), NamedTextColor.GREEN);
+        MessageUtils.broadcast("➤ Nhập /cw để dịch chuyển đến xem!", NamedTextColor.AQUA);
+        MessageUtils.broadcast("➤ Đặt cược ngay: /cw bet <red/blue> <tiền>", NamedTextColor.YELLOW);
         MessageUtils.broadcast("========================================", NamedTextColor.GOLD);
     }
 
-    // --- CẬP NHẬT LOGIC START FIGHT ---
-    public void startFight(Player admin) {
-        // 1. Kiểm tra có sân chưa
+    public void startFight(Player sender) {
+        if (!checkPermission(sender)) return;
+
         if (!arenaManager.hasArena()) {
-            MessageUtils.send(admin, "Chưa có sân đấu! Hãy dùng /cw build trước.", NamedTextColor.RED);
+            MessageUtils.send(sender, "Chưa có sân đấu!", NamedTextColor.RED);
             return;
         }
-
-        // 2. Kiểm tra trận đấu có đang chạy không
         if (isRunning) {
-            MessageUtils.send(admin, "Trận đấu đang diễn ra rồi! Không thể start lại.", NamedTextColor.RED);
+            MessageUtils.send(sender, "Trận đấu đang diễn ra!", NamedTextColor.RED);
+            return;
+        }
+        if (checkChickensDead()) {
+            MessageUtils.send(sender, "Gà đã chết. Hãy dùng /cw restart.", NamedTextColor.RED);
             return;
         }
 
-        // 3. Kiểm tra gà có còn sống không (Trường hợp trận đấu đã xong nhưng Admin cố start lại)
-        Chicken c1 = arenaManager.getChicken1();
-        Chicken c2 = arenaManager.getChicken2();
-
-        if (c1 == null || c1.isDead() || c2 == null || c2.isDead()) {
-            MessageUtils.send(admin, "Gà đã chết hoặc kết thúc! Vui lòng dùng /cw restart để bắt đầu ván mới.", NamedTextColor.RED);
-            return;
-        }
-
-        // --- BẮT ĐẦU ---
         isRunning = true;
-        betManager.closeBetting();
 
-        MessageUtils.broadcast("=== KHÓA SỔ CƯỢC - TRẬN ĐẤU BẮT ĐẦU ===", NamedTextColor.GOLD);
+        MessageUtils.broadcast("=== TRẬN ĐẤU BẮT ĐẦU - VẪN CÓ THỂ ĐẶT CƯỢC ===", NamedTextColor.GOLD);
         MessageUtils.broadcast("Quỹ Đỏ: " + Math.round(betManager.getTotalRed()) + "$", NamedTextColor.RED);
         MessageUtils.broadcast("Quỹ Xanh: " + Math.round(betManager.getTotalBlue()) + "$", NamedTextColor.BLUE);
 
-        setupChicken(c1, c2);
-        setupChicken(c2, c1);
+        setupChicken(arenaManager.getChicken1(), arenaManager.getChicken2());
+        setupChicken(arenaManager.getChicken2(), arenaManager.getChicken1());
 
         gameTask = new BukkitRunnable() {
             @Override
             public void run() {
-                if (!isRunning || checkChickensDead()) {
-                    this.cancel();
-                    return;
-                }
+                if (!isRunning || checkChickensDead()) { this.cancel(); return; }
                 skillManager.tryCastSkill(arenaManager.getChicken1(), arenaManager.getChicken2());
                 skillManager.tryCastSkill(arenaManager.getChicken2(), arenaManager.getChicken1());
             }
@@ -106,27 +115,32 @@ public class GameManager {
         gameTask.runTaskTimer(plugin, 20L, 20L);
     }
 
-    public void endFight() {
-        if (isRunning || betManager.isBettingOpen()) {
-            betManager.refundAll();
-        }
-
-        stopGameLoop();
-        arenaManager.clearArena();
-        MessageUtils.broadcast("Sân đấu đã đóng cửa.", NamedTextColor.GREEN);
+    public void endFight(Player sender) {
+        if (!checkPermission(sender)) return;
+        forceEnd();
     }
 
-    public void restartMatch() {
+    public void restartMatch(Player sender) {
+        if (!checkPermission(sender)) return;
+
         if (!arenaManager.hasArena()) return;
 
         betManager.refundAll();
-
         stopGameLoop();
 
         betManager.openBetting();
         arenaManager.spawnFighters();
 
-        MessageUtils.broadcast("♻ Đã khởi động lại trận đấu! Mời đặt cược lại.", NamedTextColor.GREEN);
+        MessageUtils.broadcast("♻ Host đã khởi động lại trận đấu! Mời đặt cược lại.", NamedTextColor.GREEN);
+    }
+
+    private boolean checkPermission(Player p) {
+        if (p.hasPermission("chickenwar.admin")) return true;
+        if (arenaManager.getHostUUID() != null && arenaManager.getHostUUID().equals(p.getUniqueId())) {
+            return true;
+        }
+        MessageUtils.send(p, "Chỉ Chủ phòng mới được dùng lệnh này!", NamedTextColor.RED);
+        return false;
     }
 
     public void onChickenDeath(Entity deadChicken) {
@@ -146,6 +160,7 @@ public class GameManager {
 
         if (winner != null) {
             stopGameLoop();
+            betManager.closeBetting();
 
             MessageUtils.broadcast("🏆 " + (winner.customName() != null ? ((net.kyori.adventure.text.TextComponent)winner.customName()).content() : "Chiến Kê") + " ĐÃ CHIẾN THẮNG!", NamedTextColor.GOLD);
             winner.getWorld().spawnParticle(Particle.FIREWORK, winner.getLocation(), 50, 0.5, 0.5, 0.5, 0.1);
@@ -155,11 +170,18 @@ public class GameManager {
         }
     }
 
+    public void forceEnd() {
+        if (isRunning || betManager.isBettingOpen()) {
+            betManager.refundAll();
+        }
+        stopGameLoop();
+        arenaManager.clearArena();
+        MessageUtils.broadcast("Sân đấu đã đóng cửa.", NamedTextColor.GREEN);
+    }
+
     private void stopGameLoop() {
         isRunning = false;
-        if (gameTask != null && !gameTask.isCancelled()) {
-            gameTask.cancel();
-        }
+        if (gameTask != null && !gameTask.isCancelled()) gameTask.cancel();
     }
 
     private boolean checkChickensDead() {
@@ -169,29 +191,20 @@ public class GameManager {
 
     private void setupChicken(Chicken c, LivingEntity target) {
         if (c == null) return;
-
         c.setAI(true);
         for (PotionEffect effect : c.getActivePotionEffects()) {
             c.removePotionEffect(effect.getType());
         }
-
-        double hp = plugin.getConfig().getDouble("chicken-health", 100.0);
+        double hp = plugin.getConfig().getDouble("chicken-health", 60.0);
         AttributeInstance attr = c.getAttribute(Attribute.MAX_HEALTH);
         if (attr != null) attr.setBaseValue(hp);
         c.setHealth(hp);
-
         Bukkit.getMobGoals().removeGoal(c, VanillaGoal.PANIC);
         Bukkit.getMobGoals().addGoal(c, 1, new ChickenWarAttackGoal(c, plugin));
         c.setTarget(target);
     }
 
-    public BetManager getBetManager() {
-        return betManager;
-    }
-
-    public void forceEnd() {
-        endFight();
-    }
+    public BetManager getBetManager() { return betManager; }
 
     public static class ChickenWarAttackGoal implements Goal<Chicken> {
         private final Chicken chicken;
@@ -204,32 +217,23 @@ public class GameManager {
             this.plugin = plugin;
             this.key = GoalKey.of(Chicken.class, new NamespacedKey("chickenwar", "attack"));
         }
-
         @Override
-        public boolean shouldActivate() {
-            return chicken.getTarget() != null && !chicken.getTarget().isDead();
-        }
-
+        public boolean shouldActivate() { return chicken.getTarget() != null && !chicken.getTarget().isDead(); }
         @Override
         public void tick() {
             LivingEntity target = chicken.getTarget();
             if (target == null) return;
-
             chicken.getPathfinder().moveTo(target, 1.4);
-
             if (chicken.getLocation().distanceSquared(target.getLocation()) < 2.5) {
                 if (System.currentTimeMillis() - lastAttackTime > 800) {
                     chicken.swingMainHand();
-                    double dmg = plugin.getConfig().getDouble("base-damage", 5.0);
-                    target.damage(dmg, chicken);
+                    target.damage(plugin.getConfig().getDouble("base-damage", 5.0), chicken);
                     lastAttackTime = System.currentTimeMillis();
                 }
             }
         }
-
         @Override
         public @NotNull GoalKey<Chicken> getKey() { return key; }
-
         @Override
         public @NotNull EnumSet<GoalType> getTypes() { return EnumSet.of(GoalType.TARGET, GoalType.MOVE); }
     }
