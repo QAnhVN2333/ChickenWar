@@ -1,10 +1,12 @@
 package com.example.chickenwar;
 
+import com.example.chickenwar.config.ConfigKeys;
+import com.example.chickenwar.managers.ConfigManager;
 import com.example.chickenwar.managers.GameManager;
 import com.example.chickenwar.utils.MessageUtils;
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -24,11 +26,10 @@ public class ChickenWarCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("Lệnh này chỉ dành cho người chơi.");
+            sender.sendMessage(msg("command.only-player"));
             return true;
         }
 
-        // 1. Lệnh /cw (Không tham số) -> Teleport đến Đấu Trường
         if (args.length == 0) {
             teleportToArena(player);
             return true;
@@ -37,130 +38,171 @@ public class ChickenWarCommand implements CommandExecutor {
         String sub = args[0].toLowerCase();
 
         switch (sub) {
-            case "help":
-                sendHelpMenu(player);
-                break;
-
-            case "bet":
-                handleBet(player, args);
-                break;
-
-            case "build":
-                // Ai cũng build được (để làm Host), nhưng phải ở đúng world
+            case "help" -> sendHelpMenu(player);
+            case "bet" -> handleBet(player, args);
+            case "build" -> {
+                if (!requireAdmin(player)) {
+                    return true;
+                }
                 gameManager.buildAndInvite(player);
-                break;
-
-            // --- CÁC LỆNH QUẢN LÝ (HOST HOẶC ADMIN) ---
-            case "start":
+            }
+            case "start" -> {
+                if (!requireAdmin(player)) {
+                    return true;
+                }
                 gameManager.startFight(player);
-                break;
-            case "restart":
+            }
+            case "restart" -> {
+                if (!requireAdmin(player)) {
+                    return true;
+                }
                 gameManager.restartMatch(player);
-                break;
-            case "end":
+            }
+            case "end" -> {
+                if (!requireAdmin(player)) {
+                    return true;
+                }
                 gameManager.endFight(player);
-                break;
-
-            // --- CÁC LỆNH ADMIN (OP) ---
-            case "setwarp":
-                if (!player.hasPermission("chickenwar.admin")) {
-                    MessageUtils.send(player, "Bạn không có quyền Admin!", NamedTextColor.RED);
+            }
+            case "bossbar" -> toggleBossBar(player);
+            case "claim" -> claimPayout(player);
+            case "setwarp" -> {
+                if (!requireAdmin(player)) {
                     return true;
                 }
                 setWarp(player);
-                break;
-
-            case "reload":
-                if (!player.hasPermission("chickenwar.admin")) {
-                    MessageUtils.send(player, "Bạn không có quyền Admin!", NamedTextColor.RED);
+            }
+            case "reload" -> {
+                if (!requireAdmin(player)) {
                     return true;
                 }
-                plugin.reloadConfig();
-                MessageUtils.send(player, "Đã tải lại cấu hình (Config Reloaded)!", NamedTextColor.GREEN);
-                break;
-
-            default:
-                MessageUtils.send(player, "Lệnh không tồn tại. Gõ /cw help để xem hướng dẫn.", NamedTextColor.RED);
+                plugin.getConfigManager().reload();
+                MessageUtils.send(player, msg("command.reload-success"), NamedTextColor.GREEN);
+            }
+            default -> MessageUtils.send(player, msg("command.unknown"), NamedTextColor.RED);
         }
 
         return true;
     }
 
-    // --- LOGIC XỬ LÝ RIÊNG ---
-
     private void sendHelpMenu(Player player) {
-        MessageUtils.send(player, "============== HƯỚNG DẪN CHICKEN WAR ==============", NamedTextColor.GOLD);
+        MessageUtils.send(player, msg("help.title"), NamedTextColor.GOLD);
+        MessageUtils.send(player, msg("help.player-1"), NamedTextColor.YELLOW);
+        MessageUtils.send(player, msg("help.player-2"), NamedTextColor.YELLOW);
+        MessageUtils.send(player, msg("help.player-3"), NamedTextColor.YELLOW);
+        MessageUtils.send(player, msg("help.player-4"), NamedTextColor.YELLOW);
 
-        // 1. Lệnh cho NGƯỜI CHƠI
-        MessageUtils.send(player, "➤ /cw : Dịch chuyển ngay đến Đấu Trường.", NamedTextColor.YELLOW);
-        MessageUtils.send(player, "➤ /cw bet <red/blue> <tiền> : Đặt cược cho Gà Đỏ hoặc Xanh.", NamedTextColor.YELLOW);
-        MessageUtils.send(player, "➤ /cw build : Xây sân đấu (Bạn sẽ trở thành Host/Chủ phòng).", NamedTextColor.YELLOW);
-
-        // 2. Lệnh cho ADMIN (Chỉ hiện nếu có quyền)
         if (player.hasPermission("chickenwar.admin")) {
-            MessageUtils.send(player, "--- LỆNH ADMIN / HOST ---", NamedTextColor.RED);
-            MessageUtils.send(player, "➤ /cw start : Bắt đầu trận đấu (Sau khi đã có người cược).", NamedTextColor.AQUA);
-            MessageUtils.send(player, "➤ /cw end : Kết thúc trận đấu & Dọn sân.", NamedTextColor.AQUA);
-            MessageUtils.send(player, "➤ /cw restart : Hủy trận cũ, bắt đầu trận mới.", NamedTextColor.AQUA);
-            MessageUtils.send(player, "➤ /cw setwarp : Đặt điểm warp tại vị trí đang đứng.", NamedTextColor.LIGHT_PURPLE);
-            MessageUtils.send(player, "➤ /cw reload : Tải lại file config.", NamedTextColor.LIGHT_PURPLE);
+            MessageUtils.send(player, msg("help.admin-title"), NamedTextColor.RED);
+            MessageUtils.send(player, msg("help.admin-1"), NamedTextColor.AQUA);
+            MessageUtils.send(player, msg("help.admin-2"), NamedTextColor.AQUA);
+            MessageUtils.send(player, msg("help.admin-3"), NamedTextColor.AQUA);
+            MessageUtils.send(player, msg("help.admin-4"), NamedTextColor.LIGHT_PURPLE);
+            MessageUtils.send(player, msg("help.admin-5"), NamedTextColor.LIGHT_PURPLE);
         } else {
-            // Nhắc nhẹ người chơi về quyền Host
-            MessageUtils.send(player, "--- LƯU Ý ---", NamedTextColor.GRAY);
-            MessageUtils.send(player, "Khi bạn dùng lệnh /cw build, bạn sẽ có quyền dùng start/end/restart.", NamedTextColor.GRAY);
+            MessageUtils.send(player, msg("help.note-title"), NamedTextColor.GRAY);
+            MessageUtils.send(player, msg("help.note-content"), NamedTextColor.GRAY);
         }
 
-        MessageUtils.send(player, "==================================================", NamedTextColor.GOLD);
+        MessageUtils.send(player, msg("help.footer"), NamedTextColor.GOLD);
     }
 
     private void handleBet(Player player, String[] args) {
         if (args.length < 3) {
-            MessageUtils.send(player, "Sai cú pháp! Dùng: /cw bet <red/blue> <số tiền>", NamedTextColor.RED);
+            MessageUtils.send(player, msg("command.bet-usage"), NamedTextColor.RED);
             return;
         }
+
         try {
             double amount = Double.parseDouble(args[2]);
-            if (amount <= 0) throw new NumberFormatException();
-            gameManager.getBetManager().placeBet(player, args[1].toLowerCase(), amount);
+            if (amount <= 0) {
+                throw new NumberFormatException();
+            }
+            gameManager.placeBet(player, args[1].toLowerCase(), amount);
         } catch (NumberFormatException e) {
-            MessageUtils.send(player, "Số tiền không hợp lệ!", NamedTextColor.RED);
+            MessageUtils.send(player, msg("command.invalid-amount"), NamedTextColor.RED);
+        }
+    }
+
+    private void toggleBossBar(Player player) {
+        boolean enabled = gameManager.toggleBossBar(player);
+        if (enabled) {
+            MessageUtils.send(player, msg("command.bossbar-enabled"), NamedTextColor.GREEN);
+        } else {
+            MessageUtils.send(player, msg("command.bossbar-disabled"), NamedTextColor.YELLOW);
         }
     }
 
     private void teleportToArena(Player player) {
-        String worldName = plugin.getConfig().getString("warp.world");
+        String worldName = plugin.getConfig().getString(ConfigKeys.Warp.WORLD);
         if (worldName == null) {
-            MessageUtils.send(player, "Chưa thiết lập điểm Warp! Admin hãy dùng /cw setwarp.", NamedTextColor.RED);
+            MessageUtils.send(player, msg("command.warp-not-set"), NamedTextColor.RED);
             return;
         }
 
-        org.bukkit.World world = plugin.getServer().getWorld(worldName);
+        World world = plugin.getServer().getWorld(worldName);
         if (world == null) {
-            MessageUtils.send(player, "Thế giới sự kiện không tồn tại hoặc chưa load!", NamedTextColor.RED);
+            MessageUtils.send(player, msg("command.warp-world-missing"), NamedTextColor.RED);
             return;
         }
 
-        double x = plugin.getConfig().getDouble("warp.x");
-        double y = plugin.getConfig().getDouble("warp.y");
-        double z = plugin.getConfig().getDouble("warp.z");
-        float yaw = (float) plugin.getConfig().getDouble("warp.yaw");
-        float pitch = (float) plugin.getConfig().getDouble("warp.pitch");
+        double x = plugin.getConfig().getDouble(ConfigKeys.Warp.X);
+        double y = plugin.getConfig().getDouble(ConfigKeys.Warp.Y);
+        double z = plugin.getConfig().getDouble(ConfigKeys.Warp.Z);
+        float yaw = (float) plugin.getConfig().getDouble(ConfigKeys.Warp.YAW);
+        float pitch = (float) plugin.getConfig().getDouble(ConfigKeys.Warp.PITCH);
 
         player.teleport(new Location(world, x, y, z, yaw, pitch));
-        MessageUtils.send(player, "Đã dịch chuyển đến Đấu Trường Gà!", NamedTextColor.GREEN);
+        MessageUtils.send(player, msg("command.teleport-success"), NamedTextColor.GREEN);
         player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
     }
 
     private void setWarp(Player player) {
         Location loc = player.getLocation();
-        plugin.getConfig().set("warp.world", loc.getWorld().getName());
-        plugin.getConfig().set("warp.x", loc.getX());
-        plugin.getConfig().set("warp.y", loc.getY());
-        plugin.getConfig().set("warp.z", loc.getZ());
-        plugin.getConfig().set("warp.yaw", loc.getYaw());
-        plugin.getConfig().set("warp.pitch", loc.getPitch());
+        plugin.getConfig().set(ConfigKeys.Warp.WORLD, loc.getWorld().getName());
+        plugin.getConfig().set(ConfigKeys.Warp.X, loc.getX());
+        plugin.getConfig().set(ConfigKeys.Warp.Y, loc.getY());
+        plugin.getConfig().set(ConfigKeys.Warp.Z, loc.getZ());
+        plugin.getConfig().set(ConfigKeys.Warp.YAW, loc.getYaw());
+        plugin.getConfig().set(ConfigKeys.Warp.PITCH, loc.getPitch());
         plugin.saveConfig();
-        MessageUtils.send(player, "✅ Đã lưu tọa độ Warp sự kiện tại đây!", NamedTextColor.GREEN);
+
+        MessageUtils.send(player, msg("command.setwarp-success"), NamedTextColor.GREEN);
         player.playSound(player.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f);
     }
+
+    private void claimPayout(Player player) {
+        long claimed = gameManager.getBetManager().claimPending(player);
+        if (claimed <= 0) {
+            MessageUtils.send(player, msg("command.claim-empty"), NamedTextColor.YELLOW);
+            return;
+        }
+
+        MessageUtils.send(player, msg("command.claim-success", java.util.Map.of("amount", String.valueOf(claimed))), NamedTextColor.GREEN);
+    }
+
+    private boolean requireAdmin(Player player) {
+        if (player.hasPermission("chickenwar.admin")) {
+            return true;
+        }
+        MessageUtils.send(player, msg("command.no-admin-permission"), NamedTextColor.RED);
+        return false;
+    }
+
+    private String msg(String path) {
+        ConfigManager configManager = plugin.getConfigManager();
+        if (configManager == null) {
+            return path;
+        }
+        return configManager.getMessage(path);
+    }
+
+    private String msg(String path, java.util.Map<String, String> placeholders) {
+        ConfigManager configManager = plugin.getConfigManager();
+        if (configManager == null) {
+            return path;
+        }
+        return configManager.getMessage(path, placeholders);
+    }
 }
+

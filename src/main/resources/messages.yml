@@ -1,0 +1,168 @@
+# Placeholder guide:
+# - Use {placeholder_name} in messages.* entries to inject runtime values.
+# - Common placeholders by context are documented right above each dynamic message.
+version: 4
+prefix: "<dark_gray>[</dark_gray><gold><bold>ChickenWar</bold></gold><dark_gray>]</dark_gray> "
+
+sounds:
+  # Sound token format supports both enum-style and dotted-style:
+  # - ENTITY_ENDER_DRAGON_GROWL
+  # - entity.ender_dragon.growl
+  # Optional suffix: ;<volume>;<pitch>
+  match-start: "ENTITY_ENDER_DRAGON_GROWL;1.0;2.0"
+  countdown-tick: "BLOCK_NOTE_BLOCK_HAT;1.0;1.0"
+  bet-lock: "BLOCK_ANVIL_USE;1.0;0.8"
+  win: "ENTITY_PLAYER_LEVELUP;1.0;1.0"
+  lose: "ENTITY_VILLAGER_NO;1.0;1.0"
+  match-cancelled: "BLOCK_GLASS_BREAK;1.0;1.0"
+
+titles:
+  countdown:
+    title: "<red><bold>{seconds}</bold></red>"
+    subtitle: "<gray>Round starting soon...</gray>"
+  win:
+    title: "<gradient:#00c853:#b9f6ca><bold>YOU WON!</bold></gradient>"
+    subtitle: "<white>+<green>{profit}$</green> <dark_gray>(Tax: <red>-{tax}$</red>)</dark_gray></white>"
+  lose:
+    title: "<gradient:#ff1744:#ff6d6d><bold>YOU LOST!</bold></gradient>"
+    subtitle: "<gray>Better luck next round.</gray>"
+  cancelled:
+    title: "<gradient:#b71c1c:#ff5252><bold>MATCH CANCELLED</bold></gradient>"
+    subtitle: "<white>Liquidity too low. Your bet has been <green>refunded</green>.</white>"
+
+messages:
+  command:
+    only-player: "<red>This command can only be used by players.</red>"
+    no-admin-permission: "<red>You do not have <bold>Admin</bold> permission!</red>"
+    reload-success: "<green>Configuration reloaded successfully!</green>"
+    unknown: "<red>Unknown command.</red> <gray>Use <yellow>/cw help</yellow> for a list of commands.</gray>"
+    bet-usage: "<red>Invalid syntax!</red> <gray>Usage: <yellow>/cw bet <red|blue> <amount></yellow></gray>"
+    invalid-amount: "<red>Invalid amount. Please enter a positive number.</red>"
+    bossbar-enabled: "<green>BossBar has been <bold>enabled</bold> for you.</green>"
+    bossbar-disabled: "<gray>BossBar has been <bold>disabled</bold> for you.</gray>"
+    warp-not-set: "<red>Event warp has not been set!</red> <gray>An admin must run <yellow>/cw setwarp</yellow> first.</gray>"
+    warp-world-missing: "<red>The event world does not exist or is not loaded!</red>"
+    teleport-success: "<green>Teleported to the <bold>Chicken Arena</bold>!</green>"
+    setwarp-success: "<green>Event warp location saved at your current position!</green>"
+    claim-empty: "<gray>You have no pending rewards to claim.</gray>"
+    claim-success: "<green>Successfully claimed <bold><yellow>{amount}$</yellow></bold> into your account!</green>"
+    claim-pending-on-join: "{prefix}<white>You have a pending reward of <green><bold>{amount}$</bold></green>. Run <yellow>/cw claim</yellow> to collect it.</white>"
+
+  help:
+    title: "<gradient:#FDC830:#F37335><bold>====== CHICKEN WAR HELP ======</bold></gradient>"
+    player-1: "<yellow>/cw</yellow>                         <gray>Teleport to the Chicken Arena.</gray>"
+    player-2: "<yellow>/cw bet <red|blue> <amount></yellow>  <gray>Place a bet on Red or Blue chicken.</gray>"
+    player-3: "<yellow>/cw claim</yellow>                   <gray>Claim your pending reward (if any).</gray>"
+    player-4: "<yellow>/cw bossbar</yellow>                 <gray>Toggle the countdown BossBar for yourself.</gray>"
+    admin-title: "<dark_gray>-------- <red>ADMIN COMMANDS</red> --------</dark_gray>"
+    admin-1: "<yellow>/cw build</yellow>    <gray>Set up the arena and open the betting phase.</gray>"
+    admin-2: "<yellow>/cw start</yellow>    <gray>Start the match (requires at least one bet).</gray>"
+    admin-3: "<yellow>/cw end</yellow>      <gray>End the current match and clean up the arena.</gray>"
+    admin-4: "<yellow>/cw restart</yellow>  <gray>Cancel the current match and begin a new one.</gray>"
+    admin-5: "<yellow>/cw setwarp</yellow>  <gray>Set the event warp at your location.</gray>  <gray>|</gray>  <yellow>/cw reload</yellow>  <gray>Reload config files.</gray>"
+    note-title: "<dark_aqua>-------- NOTES --------</dark_aqua>"
+    note-content: "<gray>Regular players can only use player commands and betting features.</gray>"
+    footer: "<gradient:#FDC830:#F37335><bold>==============================</bold></gradient>"
+
+  broadcasts:
+    # Placeholders: {time}, {jackpot_amount}
+    idle-actionbar: "<gold>Next Match in: <bold>{time}</bold></gold> <dark_gray>|</dark_gray> <green>Jackpot: <bold>{jackpot_amount}$</bold></green>"
+    # Placeholders: {jackpot}, {time}
+    idle-reminder: "{prefix}<white>Current Jackpot: <green><bold>{jackpot}$</bold></green> <dark_gray>|</dark_gray>  <yellow><bold>Bet now!</bold></yellow></white>"
+    match-start:
+      # Placeholders: {chicken_a}, {chicken_b}, {seed_red}, {seed_blue}, {seed_total}
+      - ""
+      - "<gradient:#FDC830:#F37335><bold>--- BETTING IS NOW OPEN ---</bold></gradient>"
+      - "<red><bold>  {chicken_a}</bold></red> <dark_gray>VS</dark_gray> <blue><bold>{chicken_b}  </bold></blue>"
+      - "<white>Server seed split: <red>{seed_red}$</red> <gray>|</gray> <blue>{seed_blue}$</blue></white>"
+      - "<white>Server seed total: <yellow>{seed_total}$</yellow></white>"
+      - "<gray>Place your bet: <yellow>/cw bet red 1000</yellow></gray>"
+      - ""
+    # Placeholders: {seconds}, {multiplier}
+    countdown: "{prefix}<red><bold>{seconds}s</bold> remaining!</red> <gray>Underdog multiplier: <yellow>x{multiplier}</yellow></gray>"
+    match-result:
+      - ""
+      - "<gradient:#11998e:#38ef7d><bold>--- MATCH RESULT ---</bold></gradient>"
+      - "<white>Winner: <green><bold>{winner_name}</bold></green></white>"
+      - "<white>Payout ratio: <yellow>1 : {multiplier}</yellow></white>"
+      - "<gray>Tax applied: <red>{tax_percent}%</red></gray>"
+      - ""
+    top-winner: "<yellow>#{rank}</yellow> <white>{player}</white> <green><bold>+{profit}$</bold></green>"
+    jackpot-overflow: "{prefix}<gold><bold>JACKPOT OVERFLOW</bold></gold> <white>Excess <green>+{excess}$</green> has been moved to the jackpot pool.</white>"
+    match-cancelled: "{prefix}<red><bold>MATCH CANCELLED</bold></red> <gray>Low liquidity detected. All bets have been <green>refunded</green>.</gray>"
+
+  game:
+    build:
+      invalid-world: "<red>Invalid world or warp not configured!</red>"
+      world-missing: "<red>The warp world does not exist or is not loaded.</red>"
+      arena-active: "<red>The arena is already active!</red>"
+      arena-create-failed: "<red>Failed to create the arena. Check your configuration.</red>"
+      banner: "<gradient:#FDC830:#F37335><bold>========================================</bold></gradient>"
+      bet-open: "<green>Betting is open!</green> <gray>Use: <yellow>/cw bet <red|blue> <amount></yellow></gray>"
+    start:
+      no-arena: "<red>No arena is currently set up!</red>"
+      no-bet: "<red>At least one bet is required to start the match.</red>"
+      already-running: "<red>A match is already running or counting down!</red>"
+      countdown-triggered: "<green>Admin has triggered the match countdown!</green>"
+    bet:
+      invalid-state: "<red>Bets are only accepted during the <bold>BETTING</bold> phase.</red>"
+    result:
+      default-winner-name: "The Champion"
+      winner: "<white>Winner: <green><bold>{winner_name}</bold></green> <gray>({winner_side})</gray></white>"
+    force-end:
+      closed: "<gray>The arena has been closed.</gray>"
+    restart:
+      no-arena: "<red>No arena found to restart.</red>"
+      done: "<green>Match restarted successfully. Betting is now open!</green>"
+    countdown:
+      locked: "<red>Betting is now <bold>LOCKED</bold>!</red> <gray>Match begins in <yellow>{seconds}s</yellow>.</gray>"
+      tick: "<gray>Match starts in <yellow><bold>{seconds}s</bold></yellow>.</gray>"
+    launch:
+      start: "<gradient:#FDC830:#F37335><bold>=== MATCH STARTED ===</bold></gradient>"
+      red-pool: "<red>Red Pool: <bold>{amount}$</bold></red>"
+      blue-pool: "<blue>Blue Pool: <bold>{amount}$</bold></blue>"
+    auto-start:
+      triggered: "<green>Auto-start has been triggered!</green>"
+      scheduled: "<gray>First bet received. Match will <green>auto-start</green> in <yellow>{seconds}s</yellow>.</gray>"
+    auto-restart:
+      done: "<green>Auto-restart complete. New match is ready!</green>"
+    permission:
+      denied: "<red>Only <bold>Admins</bold> can use this command!</red>"
+    bossbar:
+      title: "<white>Match starts in <yellow>{seconds}s</yellow></white>"
+      betting: "<red>{chicken_a}</red> <gray>[<yellow>{pool_a}$</yellow>]</gray> <white>vs</white> <blue>{chicken_b}</blue> <gray>[<yellow>{pool_b}$</yellow>]</gray>"
+      running: "<red><bold>BETTING LOCKED</bold></red> <dark_gray>|</dark_gray> <white>MATCH IN PROGRESS</white>"
+
+  bet:
+    closed: "<red>Betting is currently <bold>CLOSED</bold>!</red>"
+    invalid-side: "<red>Invalid side!</red> <gray>Choose <red>red</red> or <blue>blue</blue>.</gray>"
+    economy-error: "<red>An economy system error occurred. Please try again later.</red>"
+    not-enough-money: "<red>You do not have enough money to place this bet!</red>"
+    already-other-side: "<red>You cannot switch sides. You have already bet on the other team!</red>"
+    min-bet: "<red>Minimum bet amount is <bold><yellow>{amount}$</yellow></bold>.</red>"
+    max-limit: "<red>Bet exceeds the current cap!</red> <gray>Maximum allowed for this side: <yellow>{amount}$</yellow></gray>"
+    side-red: "RED"
+    side-blue: "BLUE"
+    # Placeholders: {player}, {amount}, {side}, {total_red}, {total_blue}
+    placed: "<dark_gray>[Bet]</dark_gray> <white>{player}</white> <gray>placed</gray> <yellow><bold>{amount}$</bold></yellow> <gray>on</gray> <white>{side}</white> <dark_gray>(Red: {total_red}$ | Blue: {total_blue}$)</dark_gray>"
+    refund-all: "<green>All bets have been refunded to every player.</green>"
+    refund-all-liquidity: "<red>Match cancelled due to low liquidity.</red> <green>All bets refunded (100%).</green>"
+    liquidity-failed: "<red>Liquidity check failed. Match has been cancelled.</red>"
+    payout:
+      no-winner-bets: "<gray>No bets were placed on the winning side. Funds have been transferred to the <gold>Jackpot</gold>.</gray>"
+      title: "<gradient:#11998e:#38ef7d><bold>--- PARI-MUTUEL PAYOUT ---</bold></gradient>"
+      win-player: "<green>Congratulations! You received: <bold><yellow>{amount}$</yellow></bold></green>"
+      lose-player: "<gray>You lost your bet this round. Better luck next time!</gray>"
+
+  skill:
+    default-fighter-name: "Fighter Chicken"
+    cast: "<white>{fighter_name}</white> <gray>used</gray> <gold><bold>{skill_name}</bold></gold><gray>!</gray>"
+    name:
+      lightning: "LIGHTNING STRIKE"
+      spin-kick: "SPIN KICK"
+      egg-bomb: "EGG BOMB"
+      sonic-crow: "SONIC CROW"
+      heal: "RECOVERY"
+      fire-breath: "FIRE BREATH"
+      soul-drain: "SOUL DRAIN"
+      poison-peck: "POISON PECK"

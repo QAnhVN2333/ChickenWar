@@ -1,5 +1,5 @@
 name: ChickenWar
-version: 4.1
+version: 5
 main: com.example.chickenwar.ChickenWarPlugin
 api-version: '1.21'
 description: Dai chien ga dinh cao.
@@ -12,5 +12,5 @@ commands:
     usage: /cw help
 permissions:
   chickenwar.admin:
-    description: Quyen Admin (Setwarp, Reload...)
+    description: Quyen Admin cho build/start/end/restart/setwarp/reload
     default: op

@@ -1,10 +1,39 @@
-# Cấu hình Máu và Tỉ lệ
-chicken-health: 60.0
-skill-chance: 0.75
+version: 4
+arena:
+  floor-fence: CHERRY_FENCE
+  floor-material_even: GRASS_BLOCK
+  floor-material_odd: GRASS_BLOCK
+  # Used by messages placeholders: {chicken_a}
+  chicken1-name: "Chiến Kê Đỏ"
+  # Used by messages placeholders: {chicken_b}
+  chicken2-name: "Chiến Kê Xanh"
+
+chicken-health: 100.0
+skill-chance: 0.5
 base-damage: 5.0
 
-# Cấu hình Warp (Nơi diễn ra trận đấu)
-# Sử dụng lệnh /cw setwarp để tự động lưu tọa độ vào đây
+betting:
+  prestart-lock-seconds: 15
+
+auto-start:
+  enabled: true
+  delay-seconds: 60
+
+auto-restart:
+  enabled: true
+  delay-seconds: 5
+
+ui:
+  idle-broadcast-minutes: 15
+
+bossbar:
+  enabled: true
+  radius: -1
+
+actionbar:
+  enabled: true
+  radius: -1
+
 warp:
   world: "world"
   x: 0.0
@@ -12,3 +41,36 @@ warp:
   z: 0.0
   yaw: 0.0
   pitch: 0.0
+
+betting-logic:
+  tax:
+    # Used by messages placeholders: {tax_percent}
+    percentage: 5.0
+
+  jackpot-system:
+    enabled: true
+    excess-handling:
+      max-payout-multiplier: 3.0
+      pot-contribution-percent: 100.0
+    seeding:
+      # Used by messages placeholders: {seed_red}, {seed_blue}, {seed_total}
+      pot-extract-percent: 30.0
+      max-seed-amount: 50000
+      split-mode: RANDOM_SKEWED
+      max-skew-ratio: 0.8
+
+  liquidity:
+    min-ratio: 0.1
+    refund-on-fail: true
+
+  limits:
+    initial-max-bet: 50000
+    min-bet: 1000
+    auto-expand: true
+
+  scaling:
+    enabled: true
+    decrease-on-cancel: 0.15
+    increase-on-success: 0.05
+    absolute-min: 10000
+    absolute-max: 1000000

@@ -1,5 +1,6 @@
 package com.example.chickenwar;
 
+import com.example.chickenwar.managers.ConfigManager;
 import com.example.chickenwar.managers.GameManager;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.command.PluginCommand;
@@ -10,6 +11,7 @@ public class ChickenWarPlugin extends JavaPlugin {
 
     private GameManager gameManager;
     private static Economy economy = null;
+    private ConfigManager configManager;
 
     @Override
     public void onEnable() {
@@ -20,24 +22,25 @@ public class ChickenWarPlugin extends JavaPlugin {
             getLogger().info("✔ Đã kết nối hệ thống tiền tệ thành công.");
         }
 
-        // 2. Load Config
-        saveDefaultConfig();
+        // 2. Load and merge config/messages files
+        this.configManager = new ConfigManager(this);
 
-        // 3. Khởi tạo Game Manager (Nhạc trưởng)
+        // 3. Init game manager
         this.gameManager = new GameManager(this);
 
-        // 4. Đăng ký lệnh (Kiểm tra null để tránh lỗi)
+        // 4. Register command
         PluginCommand cmd = getCommand("chickenwar");
         if (cmd != null) {
             cmd.setExecutor(new ChickenWarCommand(this, gameManager));
+            cmd.setTabCompleter(new ChickenWarTabCompleter(this));
         } else {
             getLogger().severe("LỖI: Không tìm thấy lệnh 'chickenwar' trong plugin.yml!");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        // 5. Đăng ký Sự kiện
-        getServer().getPluginManager().registerEvents(new GameListener(gameManager), this);
+        // 5. Register events
+        getServer().getPluginManager().registerEvents(new GameListener(this, gameManager), this);
 
         getLogger().info("ChickenWar 3.1 (SOLID Architecture) da san sang!");
     }
@@ -59,5 +62,9 @@ public class ChickenWarPlugin extends JavaPlugin {
 
     public static Economy getEconomy() {
         return economy;
+    }
+
+    public ConfigManager getConfigManager() {
+        return configManager;
     }
 }
