@@ -3,6 +3,7 @@ package com.example.chickenwar.managers.betting;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class PariMutuelCalculator {
@@ -14,7 +15,8 @@ public final class PariMutuelCalculator {
             Map<UUID, Long> winnerBets,
             long loserPool,
             double taxPercent,
-            double maxPayoutMultiplier
+            double maxPayoutMultiplier,
+            Set<UUID> untaxedParticipants
     ) {
         if (winnerBets == null || winnerBets.isEmpty()) {
             return new CalculationResult(Collections.emptyMap(), 0L, 0L);
@@ -25,6 +27,7 @@ public final class PariMutuelCalculator {
             return new CalculationResult(Collections.emptyMap(), 0L, 0L);
         }
 
+        Set<UUID> taxExempt = untaxedParticipants == null ? Collections.emptySet() : untaxedParticipants;
         Map<UUID, Long> payouts = new HashMap<>();
         long totalTax = 0L;
         long totalExcessByCap = 0L;
@@ -48,7 +51,7 @@ public final class PariMutuelCalculator {
 
             // Tax must be calculated from the real (possibly capped) profit only.
             double cappedProfit = Math.max(0.0D, cappedReturn - wager);
-            long taxAmount = (long) Math.ceil(cappedProfit * (taxPercent / 100.0D));
+            long taxAmount = taxExempt.contains(entry.getKey()) ? 0L : (long) Math.ceil(cappedProfit * (taxPercent / 100.0D));
             if (taxAmount < 0) {
                 taxAmount = 0;
             }

@@ -14,9 +14,10 @@ import java.util.Locale;
 
 public class ChickenWarTabCompleter implements TabCompleter {
 
-    private static final List<String> PLAYER_COMMANDS = List.of("help", "bet", "bossbar", "claim");
+    private static final List<String> PLAYER_COMMANDS = List.of("help", "bet", "bossbar", "claim", "jackpot");
     private static final List<String> ADMIN_COMMANDS = List.of("build", "start", "restart", "end", "setwarp", "reload");
     private static final List<String> BET_SIDES = List.of("red", "blue");
+    private static final List<String> JACKPOT_ACTIONS = List.of("add", "remove", "set");
 
     private final ChickenWarPlugin plugin;
 
@@ -39,6 +40,15 @@ public class ChickenWarTabCompleter implements TabCompleter {
         if ("bet".equals(subCommand)) {
             if (args.length == 2) {
                 return filterByPrefix(BET_SIDES, args[1]);
+            }
+            if (args.length == 3) {
+                return completeBetAmounts(args[2]);
+            }
+        }
+
+        if ("jackpot".equals(subCommand) && sender.hasPermission("chickenwar.admin")) {
+            if (args.length == 2) {
+                return filterByPrefix(JACKPOT_ACTIONS, args[1]);
             }
             if (args.length == 3) {
                 return completeBetAmounts(args[2]);
@@ -77,4 +87,3 @@ public class ChickenWarTabCompleter implements TabCompleter {
         return result;
     }
 }
-

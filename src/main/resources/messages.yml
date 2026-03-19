@@ -1,7 +1,7 @@
 # Placeholder guide:
 # - Use {placeholder_name} in messages.* entries to inject runtime values.
 # - Common placeholders by context are documented right above each dynamic message.
-version: 4
+version: 8
 prefix: "<dark_gray>[</dark_gray><gold><bold>ChickenWar</bold></gold><dark_gray>]</dark_gray> "
 
 sounds:
@@ -47,19 +47,25 @@ messages:
     claim-empty: "<gray>You have no pending rewards to claim.</gray>"
     claim-success: "<green>Successfully claimed <bold><yellow>{amount}$</yellow></bold> into your account!</green>"
     claim-pending-on-join: "{prefix}<white>You have a pending reward of <green><bold>{amount}$</bold></green>. Run <yellow>/cw claim</yellow> to collect it.</white>"
+    jackpot-usage: "<red>Usage:</red> <yellow>/cw jackpot</yellow> <gray>or</gray> <yellow>/cw jackpot <add|remove|set> <amount></yellow>"
+    jackpot-info: "<gold>Jackpot:</gold> <yellow><bold>{jackpot}$</bold></yellow> <dark_gray>|</dark_gray> <gold>Current round server seed:</gold> <yellow>{round_seed}$</yellow> <dark_gray>(Red: {seed_red}$, Blue: {seed_blue}$)</dark_gray>"
+    jackpot-updated: "<green>Jackpot updated.</green> <gray>Action:</gray> <yellow>{action}</yellow> <gray>| Amount:</gray> <yellow>{amount}$</yellow> <gray>| New jackpot:</gray> <yellow><bold>{jackpot}$</bold></yellow>"
+    jackpot-invalid-operation: "<red>Cannot apply jackpot operation.</red> <gray>Amount:</gray> <yellow>{amount}$</yellow> <gray>| Current jackpot:</gray> <yellow>{jackpot}$</yellow>"
 
   help:
     title: "<gradient:#FDC830:#F37335><bold>====== CHICKEN WAR HELP ======</bold></gradient>"
-    player-1: "<yellow>/cw</yellow>                         <gray>Teleport to the Chicken Arena.</gray>"
+    player-1: "<yellow>/cw help</yellow>                    <gray>Show command help.</gray>"
     player-2: "<yellow>/cw bet <red|blue> <amount></yellow>  <gray>Place a bet on Red or Blue chicken.</gray>"
     player-3: "<yellow>/cw claim</yellow>                   <gray>Claim your pending reward (if any).</gray>"
     player-4: "<yellow>/cw bossbar</yellow>                 <gray>Toggle the countdown BossBar for yourself.</gray>"
+    player-5: "<yellow>/cw jackpot</yellow>                 <gray>Show current jackpot and server seed status.</gray>"
     admin-title: "<dark_gray>-------- <red>ADMIN COMMANDS</red> --------</dark_gray>"
     admin-1: "<yellow>/cw build</yellow>    <gray>Set up the arena and open the betting phase.</gray>"
     admin-2: "<yellow>/cw start</yellow>    <gray>Start the match (requires at least one bet).</gray>"
     admin-3: "<yellow>/cw end</yellow>      <gray>End the current match and clean up the arena.</gray>"
     admin-4: "<yellow>/cw restart</yellow>  <gray>Cancel the current match and begin a new one.</gray>"
     admin-5: "<yellow>/cw setwarp</yellow>  <gray>Set the event warp at your location.</gray>  <gray>|</gray>  <yellow>/cw reload</yellow>  <gray>Reload config files.</gray>"
+    admin-6: "<yellow>/cw jackpot <add|remove|set> <amount></yellow>  <gray>Adjust jackpot pool manually.</gray>"
     note-title: "<dark_aqua>-------- NOTES --------</dark_aqua>"
     note-content: "<gray>Regular players can only use player commands and betting features.</gray>"
     footer: "<gradient:#FDC830:#F37335><bold>==============================</bold></gradient>"
@@ -131,7 +137,8 @@ messages:
     bossbar:
       title: "<white>Match starts in <yellow>{seconds}s</yellow></white>"
       betting: "<red>{chicken_a}</red> <gray>[<yellow>{pool_a}$</yellow>]</gray> <white>vs</white> <blue>{chicken_b}</blue> <gray>[<yellow>{pool_b}$</yellow>]</gray>"
-      running: "<red><bold>BETTING LOCKED</bold></red> <dark_gray>|</dark_gray> <white>MATCH IN PROGRESS</white>"
+      auto-start: "<gold>Betting will be locked in <yellow>{seconds}s</yellow>! Place your bets now!</gold>"
+      running: "<red>{red_chicken}</red>: <white>{red_health} ❤</white> <dark_gray>|</dark_gray> <blue>{blue_chicken}</blue>: <white>{blue_health} ❤</white>"
 
   bet:
     closed: "<red>Betting is currently <bold>CLOSED</bold>!</red>"
@@ -157,12 +164,13 @@ messages:
   skill:
     default-fighter-name: "Fighter Chicken"
     cast: "<white>{fighter_name}</white> <gray>used</gray> <gold><bold>{skill_name}</bold></gold><gray>!</gray>"
+    winstreak-line: "<gold>Winstreak: {streak}</gold>"
     name:
       lightning: "LIGHTNING STRIKE"
       spin-kick: "SPIN KICK"
       egg-bomb: "EGG BOMB"
       sonic-crow: "SONIC CROW"
-      heal: "RECOVERY"
+      heal: "REVERSE CURSED TECHNIQUE"
       fire-breath: "FIRE BREATH"
       soul-drain: "SOUL DRAIN"
       poison-peck: "POISON PECK"

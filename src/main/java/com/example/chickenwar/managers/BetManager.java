@@ -17,6 +17,7 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 public class BetManager {
@@ -91,6 +92,24 @@ public class BetManager {
         return hasHumanBet(redBets) || hasHumanBet(blueBets);
     }
 
+    public boolean hasAnyRoundBet() {
+        return hasPositiveBet(redBets) || hasPositiveBet(blueBets);
+    }
+
+    public boolean hasPlayerBet(UUID playerId) {
+        if (playerId == null) {
+            return false;
+        }
+        return redBets.getOrDefault(playerId, 0L) > 0L || blueBets.getOrDefault(playerId, 0L) > 0L;
+    }
+
+    public Map<UUID, Long> getHumanBettors() {
+        Map<UUID, Long> bettors = new HashMap<>();
+        mergeHumanBets(bettors, redBets);
+        mergeHumanBets(bettors, blueBets);
+        return bettors;
+    }
+
     public boolean placeBet(Player player, String side, double amountRaw) {
         if (!bettingOpen) {
             MessageUtils.send(player, msg("bet.closed"), NamedTextColor.RED);
@@ -121,7 +140,7 @@ public class BetManager {
 
         if (("red".equals(side) && blueBets.containsKey(player.getUniqueId()))
                 || ("blue".equals(side) && redBets.containsKey(player.getUniqueId()))) {
-            MessageUtils.send(player, msg("bet.already-other-side"), NamedTextColor.RED);
+            MessageUtils.send(player, msg("bet.already.other.side"), NamedTextColor.RED);
             return false;
         }
 
@@ -204,7 +223,8 @@ public class BetManager {
                 winners,
                 loserPool,
                 getTaxPercent(),
-                getMaxPayoutMultiplier()
+                getMaxPayoutMultiplier(),
+                Set.of(SERVER_POT_UUID)
         );
 
         MessageUtils.broadcast(msg("bet.payout.title"), NamedTextColor.GOLD);
@@ -486,7 +506,11 @@ public class BetManager {
     }
 
     private double getMaxPayoutMultiplier() {
-        return plugin.getConfig().getDouble(ConfigKeys.BettingLogic.MAX_PAYOUT_MULTIPLIER, 5.0D);
+        if (plugin.getConfig().isSet(ConfigKeys.BettingLogic.MAX_PAYOUT_MULTIPLIER)) {
+            return plugin.getConfig().getDouble(ConfigKeys.BettingLogic.MAX_PAYOUT_MULTIPLIER, 5.0D);
+        }
+        // Backward-compatible fallback for legacy configs used in older docs/issues.
+        return plugin.getConfig().getDouble("max-multiplier", 5.0D);
     }
 
     private double getPotContributionPercent() {
@@ -517,6 +541,15 @@ public class BetManager {
         return sideBets.entrySet().stream().anyMatch(entry -> !SERVER_POT_UUID.equals(entry.getKey()) && entry.getValue() > 0);
     }
 
+    private void mergeHumanBets(Map<UUID, Long> target, Map<UUID, Long> source) {
+        for (Map.Entry<UUID, Long> entry : source.entrySet()) {
+            if (SERVER_POT_UUID.equals(entry.getKey()) || entry.getValue() <= 0L) {
+                continue;
+            }
+            target.merge(entry.getKey(), entry.getValue(), Long::sum);
+        }
+    }
+
     private long calculatePlayerTax(long wager, long loserPool, long winnerPool) {
         if (wager <= 0 || winnerPool <= 0 || loserPool <= 0) {
             return 0L;
@@ -537,10 +570,18 @@ public class BetManager {
         return Math.max(0L, taxAmount);
     }
 
+    private long getServerSeedOnSide(Map<UUID, Long> sideBets) {
+        return Math.max(0L, sideBets.getOrDefault(SERVER_POT_UUID, 0L));
+    }
+
+    private boolean hasPositiveBet(Map<UUID, Long> sideBets) {
+        return sideBets.values().stream().anyMatch(value -> value != null && value > 0L);
+    }
+
     private Map<UUID, Long> getHumanBetsCopy(Map<UUID, Long> source) {
         Map<UUID, Long> output = new HashMap<>();
         for (Map.Entry<UUID, Long> entry : source.entrySet()) {
-            if (SERVER_POT_UUID.equals(entry.getKey())) {
+            if (SERVER_POT_UUID.equals(entry.getKey()) || entry.getValue() <= 0L) {
                 continue;
             }
             output.put(entry.getKey(), entry.getValue());
@@ -548,8 +589,40 @@ public class BetManager {
         return output;
     }
 
+
     public long getJackpot() {
         return jackpot;
+    }
+
+    public boolean addJackpot(long amount) {
+        if (amount <= 0L) {
+            return false;
+        }
+        jackpot += amount;
+        saveState();
+        return true;
+    }
+
+    public boolean removeJackpot(long amount) {
+        if (amount <= 0L || amount > jackpot) {
+            return false;
+        }
+        jackpot -= amount;
+        saveState();
+        return true;
+    }
+
+    public boolean setJackpot(long amount) {
+        if (amount < 0L) {
+            return false;
+        }
+        jackpot = amount;
+        saveState();
+        return true;
+    }
+
+    public long getCurrentRoundServerSeed() {
+        return getServerSeedOnSide(redBets) + getServerSeedOnSide(blueBets);
     }
 
     public long getLastSeedAmount() {
@@ -565,8 +638,12 @@ public class BetManager {
     }
 
     public double getCurrentUnderdogMultiplier() {
-        long red = Math.max(0L, getTotalRed());
-        long blue = Math.max(0L, getTotalBlue());
+        return calculateUnderdogMultiplier(getTotalRed(), getTotalBlue(), getMaxPayoutMultiplier());
+    }
+
+    static double calculateUnderdogMultiplier(long redTotal, long blueTotal, double maxMultiplier) {
+        long red = Math.max(0L, redTotal);
+        long blue = Math.max(0L, blueTotal);
         if (red <= 0 || blue <= 0) {
             return 1.0D;
         }
@@ -577,7 +654,13 @@ public class BetManager {
             return 1.0D;
         }
 
-        return ((double) (underdogPool + favoritePool)) / underdogPool;
+        double rawMultiplier = ((double) (underdogPool + favoritePool)) / underdogPool;
+        if (maxMultiplier <= 0.0D) {
+            return rawMultiplier;
+        }
+
+        // Clamp the displayed multiplier so it never exceeds configured maximum.
+        return Math.min(rawMultiplier, maxMultiplier);
     }
 
     public record WinnerPayout(long wager, long payout, long profit, long tax) {

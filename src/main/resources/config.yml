@@ -1,4 +1,4 @@
-version: 4
+version: 5
 arena:
   floor-fence: CHERRY_FENCE
   floor-material_even: GRASS_BLOCK
@@ -8,7 +8,7 @@ arena:
   # Used by messages placeholders: {chicken_b}
   chicken2-name: "Chiến Kê Xanh"
 
-chicken-health: 100.0
+chicken-health: 200.0
 skill-chance: 0.5
 base-damage: 5.0
 
@@ -33,6 +33,8 @@ bossbar:
 actionbar:
   enabled: true
   radius: -1
+  # NEARBY | BETTORS | NEARBY_OR_BETTORS
+  skill-audience: NEARBY_OR_BETTORS
 
 warp:
   world: "world"
@@ -50,7 +52,7 @@ betting-logic:
   jackpot-system:
     enabled: true
     excess-handling:
-      max-payout-multiplier: 3.0
+      max-payout-multiplier: 2.0
       pot-contribution-percent: 100.0
     seeding:
       # Used by messages placeholders: {seed_red}, {seed_blue}, {seed_total}
@@ -74,3 +76,12 @@ betting-logic:
     increase-on-success: 0.05
     absolute-min: 10000
     absolute-max: 1000000
+
+auto-build-on-startup: true
+
+winstreak-broadcast:
+  enabled: true
+  streaks:
+    3: "Chiến kê {chicken} đã đạt winstreak 3 lần!"
+    5: "Chiến kê {chicken} đã đạt winstreak 5 lần!"
+    10: "Chiến kê {chicken} đã đạt winstreak 10 lần!"

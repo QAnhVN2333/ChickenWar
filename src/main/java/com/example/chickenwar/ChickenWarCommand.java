@@ -1,17 +1,19 @@
 package com.example.chickenwar;
 
 import com.example.chickenwar.config.ConfigKeys;
+import com.example.chickenwar.managers.BetManager;
 import com.example.chickenwar.managers.ConfigManager;
 import com.example.chickenwar.managers.GameManager;
 import com.example.chickenwar.utils.MessageUtils;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Map;
 
 public class ChickenWarCommand implements CommandExecutor {
 
@@ -31,7 +33,7 @@ public class ChickenWarCommand implements CommandExecutor {
         }
 
         if (args.length == 0) {
-            teleportToArena(player);
+            sendHelpMenu(player);
             return true;
         }
 
@@ -66,6 +68,7 @@ public class ChickenWarCommand implements CommandExecutor {
             }
             case "bossbar" -> toggleBossBar(player);
             case "claim" -> claimPayout(player);
+            case "jackpot" -> handleJackpot(player, args);
             case "setwarp" -> {
                 if (!requireAdmin(player)) {
                     return true;
@@ -91,6 +94,7 @@ public class ChickenWarCommand implements CommandExecutor {
         MessageUtils.send(player, msg("help.player-2"), NamedTextColor.YELLOW);
         MessageUtils.send(player, msg("help.player-3"), NamedTextColor.YELLOW);
         MessageUtils.send(player, msg("help.player-4"), NamedTextColor.YELLOW);
+        MessageUtils.send(player, msg("help.player-5"), NamedTextColor.YELLOW);
 
         if (player.hasPermission("chickenwar.admin")) {
             MessageUtils.send(player, msg("help.admin-title"), NamedTextColor.RED);
@@ -99,6 +103,7 @@ public class ChickenWarCommand implements CommandExecutor {
             MessageUtils.send(player, msg("help.admin-3"), NamedTextColor.AQUA);
             MessageUtils.send(player, msg("help.admin-4"), NamedTextColor.LIGHT_PURPLE);
             MessageUtils.send(player, msg("help.admin-5"), NamedTextColor.LIGHT_PURPLE);
+            MessageUtils.send(player, msg("help.admin-6"), NamedTextColor.LIGHT_PURPLE);
         } else {
             MessageUtils.send(player, msg("help.note-title"), NamedTextColor.GRAY);
             MessageUtils.send(player, msg("help.note-content"), NamedTextColor.GRAY);
@@ -124,6 +129,77 @@ public class ChickenWarCommand implements CommandExecutor {
         }
     }
 
+    private void handleJackpot(Player player, String[] args) {
+        BetManager betManager = gameManager.getBetManager();
+
+        if (args.length == 1) {
+            sendJackpotInfo(player, betManager);
+            return;
+        }
+
+        if (!requireAdmin(player)) {
+            return;
+        }
+
+        if (args.length != 3) {
+            MessageUtils.send(player, msg("command.jackpot-usage"), NamedTextColor.RED);
+            return;
+        }
+
+        String action = args[1].toLowerCase();
+        Long amount = parseLongAmount(args[2]);
+        if (amount == null) {
+            MessageUtils.send(player, msg("command.invalid-amount"), NamedTextColor.RED);
+            return;
+        }
+
+        boolean success;
+        switch (action) {
+            case "add" -> success = betManager.addJackpot(amount);
+            case "remove" -> success = betManager.removeJackpot(amount);
+            case "set" -> success = betManager.setJackpot(amount);
+            default -> {
+                MessageUtils.send(player, msg("command.jackpot-usage"), NamedTextColor.RED);
+                return;
+            }
+        }
+
+        if (!success) {
+            MessageUtils.send(player, msg("command.jackpot-invalid-operation", Map.of(
+                    "amount", String.valueOf(amount),
+                    "jackpot", String.valueOf(betManager.getJackpot())
+            )), NamedTextColor.RED);
+            return;
+        }
+
+        MessageUtils.send(player, msg("command.jackpot-updated", Map.of(
+                "action", action,
+                "amount", String.valueOf(amount),
+                "jackpot", String.valueOf(betManager.getJackpot())
+        )), NamedTextColor.GREEN);
+    }
+
+    private void sendJackpotInfo(Player player, BetManager betManager) {
+        MessageUtils.send(player, msg("command.jackpot-info", Map.of(
+                "jackpot", String.valueOf(betManager.getJackpot()),
+                "round_seed", String.valueOf(betManager.getCurrentRoundServerSeed()),
+                "seed_red", String.valueOf(betManager.getLastSeedRed()),
+                "seed_blue", String.valueOf(betManager.getLastSeedBlue())
+        )), NamedTextColor.GOLD);
+    }
+
+    private Long parseLongAmount(String raw) {
+        try {
+            long parsed = Long.parseLong(raw);
+            if (parsed < 0L) {
+                return null;
+            }
+            return parsed;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
     private void toggleBossBar(Player player) {
         boolean enabled = gameManager.toggleBossBar(player);
         if (enabled) {
@@ -131,30 +207,6 @@ public class ChickenWarCommand implements CommandExecutor {
         } else {
             MessageUtils.send(player, msg("command.bossbar-disabled"), NamedTextColor.YELLOW);
         }
-    }
-
-    private void teleportToArena(Player player) {
-        String worldName = plugin.getConfig().getString(ConfigKeys.Warp.WORLD);
-        if (worldName == null) {
-            MessageUtils.send(player, msg("command.warp-not-set"), NamedTextColor.RED);
-            return;
-        }
-
-        World world = plugin.getServer().getWorld(worldName);
-        if (world == null) {
-            MessageUtils.send(player, msg("command.warp-world-missing"), NamedTextColor.RED);
-            return;
-        }
-
-        double x = plugin.getConfig().getDouble(ConfigKeys.Warp.X);
-        double y = plugin.getConfig().getDouble(ConfigKeys.Warp.Y);
-        double z = plugin.getConfig().getDouble(ConfigKeys.Warp.Z);
-        float yaw = (float) plugin.getConfig().getDouble(ConfigKeys.Warp.YAW);
-        float pitch = (float) plugin.getConfig().getDouble(ConfigKeys.Warp.PITCH);
-
-        player.teleport(new Location(world, x, y, z, yaw, pitch));
-        MessageUtils.send(player, msg("command.teleport-success"), NamedTextColor.GREEN);
-        player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
     }
 
     private void setWarp(Player player) {

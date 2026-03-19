@@ -34,13 +34,127 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 public class GameManager {
+    // ...existing code...
+
+    private void sendSkillActionBar(Chicken caster, String skillName) {
+        if (!isActionBarEnabled() || caster == null || skillName == null || skillName.isBlank()) {
+            return;
+        }
+
+        String fighterName = extractPrimaryName(caster, msg("skill.default-fighter-name"));
+        Component message = plugin.getConfigManager().getMessageComponent("skill.cast", Map.of(
+                "fighter_name", fighterName,
+                "skill_name", skillName
+        ));
+
+        for (Player recipient : getSkillActionBarRecipients()) {
+            MessageUtils.sendActionBar(recipient, message);
+        }
+    }
+
+    private List<Player> getSkillActionBarRecipients() {
+        String rawMode = plugin.getConfig().getString(ConfigKeys.ActionBar.SKILL_AUDIENCE_MODE, "NEARBY");
+        String mode = rawMode == null ? "NEARBY" : rawMode.trim().toUpperCase(Locale.ROOT);
+
+        List<Player> recipients = new ArrayList<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            boolean nearby = isPlayerInActionBarRange(player);
+            boolean bettor = betManager.hasPlayerBet(player.getUniqueId());
+
+            boolean accepted;
+            switch (mode) {
+                case "BETTORS" -> accepted = bettor;
+                case "NEARBY_OR_BETTORS" -> accepted = nearby || bettor;
+                default -> accepted = nearby;
+            }
+
+            if (accepted) {
+                recipients.add(player);
+            }
+        }
+        return recipients;
+    }
+
+    private int updateWinstreak(String winnerSide, String loserSide) {
+        int next = sideWinStreaks.getOrDefault(winnerSide, 0) + 1;
+        sideWinStreaks.put(winnerSide, next);
+        sideWinStreaks.put(loserSide, 0);
+        return next;
+    }
+
+    private void refreshFighterNameTags() {
+        applyNameTag(arenaManager.getChicken1(), RED_SIDE, NamedTextColor.RED);
+        applyNameTag(arenaManager.getChicken2(), BLUE_SIDE, NamedTextColor.BLUE);
+    }
+
+    private void applyNameTag(Chicken chicken, String side, NamedTextColor color) {
+        if (chicken == null) {
+            return;
+        }
+
+        String baseName = getBaseChickenName(side);
+        int streak = sideWinStreaks.getOrDefault(side, 0);
+
+        Component name = Component.text(baseName, color);
+        if (streak > 2) {
+            Component streakLine = plugin.getConfigManager().getMessageComponent("skill.winstreak-line", Map.of(
+                    "streak", String.valueOf(streak)
+            ));
+            name = name.append(Component.newline()).append(streakLine);
+        }
+
+        chicken.customName(name);
+        chicken.setCustomNameVisible(true);
+    }
+
+    private void broadcastWinstreakIfNeeded(String side, int streak) {
+        if (!plugin.getConfig().getBoolean(ConfigKeys.WinstreakBroadcast.ENABLED, true)) {
+            return;
+        }
+
+        String path = ConfigKeys.WinstreakBroadcast.STREAKS + "." + streak;
+        String template = plugin.getConfig().getString(path);
+        if (template == null || template.isBlank()) {
+            return;
+        }
+
+        String message = template
+                .replace("{chicken}", getBaseChickenName(side))
+                .replace("{streak}", String.valueOf(streak));
+        MessageUtils.broadcast(plugin.getConfigManager().parseMessage(message));
+    }
+
+    private String getBaseChickenName(String side) {
+        if (RED_SIDE.equals(side)) {
+            return plugin.getConfig().getString(ConfigKeys.Arena.CHICKEN1_NAME, "Red");
+        }
+        return plugin.getConfig().getString(ConfigKeys.Arena.CHICKEN2_NAME, "Blue");
+    }
+
+    private String extractPrimaryName(Chicken chicken, String fallback) {
+        if (chicken == null || chicken.customName() == null) {
+            return fallback;
+        }
+
+        String plain = PlainTextComponentSerializer.plainText().serialize(chicken.customName());
+        if (plain == null || plain.isBlank()) {
+            return fallback;
+        }
+
+        String[] lines = plain.split("\\R", 2);
+        return lines[0].isBlank() ? fallback : lines[0];
+    }
+
+    // ...existing code...
     private enum GameState {
         IDLE,
         BETTING,
@@ -49,6 +163,9 @@ public class GameManager {
         ENDING
     }
 
+    private static final String RED_SIDE = "red";
+    private static final String BLUE_SIDE = "blue";
+
     private final ChickenWarPlugin plugin;
     private final ArenaManager arenaManager;
     private final BetManager betManager;
@@ -56,6 +173,7 @@ public class GameManager {
 
     private final Set<UUID> hiddenBossBarPlayers = new HashSet<>();
     private final Map<GameState, BossBar> bossBars = new EnumMap<>(GameState.class);
+    private final Map<String, Integer> sideWinStreaks = new HashMap<>();
 
     private GameState gameState = GameState.IDLE;
     private BukkitRunnable gameTask;
@@ -65,6 +183,8 @@ public class GameManager {
     private BukkitRunnable idleUiTask;
     private boolean payoutProcessed;
     private int idleBroadcastTickerSeconds;
+    private int autoStartSecondsLeft = -1;
+    private int autoStartTotalSeconds = -1;
 
     private static final LegacyComponentSerializer BOSSBAR_SERIALIZER = LegacyComponentSerializer.legacySection();
 
@@ -73,12 +193,30 @@ public class GameManager {
         this.arenaManager = new ArenaManager(plugin);
         this.betManager = new BetManager(plugin);
         this.skillManager = new SkillManager(plugin);
+        sideWinStreaks.put(RED_SIDE, 0);
+        sideWinStreaks.put(BLUE_SIDE, 0);
 
         // Recover arena blocks and stale fighter entities from previous crash.
         arenaManager.restoreArenaFromDiskIfPresent();
         arenaManager.cleanupOrphanFighters();
 
         startIdleUiTask();
+    }
+
+    public void autoBuildArenaOnStartup() {
+        if (!plugin.getConfig().getBoolean("auto-build-on-startup", true)) {
+            return;
+        }
+        if (arenaManager.hasArena()) {
+            return;
+        }
+
+        if (!buildArenaFromConfiguredWarp()) {
+            plugin.getLogger().warning("Auto-build skipped because arena could not be created from configured warp.");
+            return;
+        }
+
+        plugin.getLogger().info("ChickenWar arena built automatically on startup.");
     }
 
     public void buildAndInvite(Player builder) {
@@ -88,15 +226,24 @@ public class GameManager {
             return;
         }
 
+        if (!buildArenaFromConfiguredWarp()) {
+            MessageUtils.send(builder, msg("game.build.arena-create-failed"), NamedTextColor.RED);
+        }
+    }
+
+    private boolean buildArenaFromConfiguredWarp() {
+        String worldName = plugin.getConfig().getString(ConfigKeys.Warp.WORLD);
+        if (worldName == null) {
+            return false;
+        }
+
         org.bukkit.World world = plugin.getServer().getWorld(worldName);
         if (world == null) {
-            MessageUtils.send(builder, msg("game.build.world-missing"), NamedTextColor.RED);
-            return;
+            return false;
         }
 
         if (arenaManager.hasArena()) {
-            MessageUtils.send(builder, msg("game.build.arena-active"), NamedTextColor.RED);
-            return;
+            return false;
         }
 
         Location warpLoc = new Location(world,
@@ -108,14 +255,15 @@ public class GameManager {
         payoutProcessed = false;
 
         if (!arenaManager.buildArena(warpLoc)) {
-            MessageUtils.send(builder, msg("game.build.arena-create-failed"), NamedTextColor.RED);
-            return;
+            return false;
         }
 
+        refreshFighterNameTags();
         betManager.openBetting();
         gameState = GameState.BETTING;
         announceBettingOpened();
         updateBettingBossBar();
+        return true;
     }
 
     public void startFight(Player sender) {
@@ -151,12 +299,13 @@ public class GameManager {
             return false;
         }
 
-        updateBettingBossBar();
-
-        // Auto-start countdown begins only after the very first successful bet.
+        // Keep ratio bar before first bet; switch to auto-start countdown after first bet.
         if (firstBet && plugin.getConfig().getBoolean(ConfigKeys.AutoStart.ENABLED, true)) {
             scheduleAutoStart();
+        } else {
+            refreshBettingPhaseBossBar();
         }
+
         return true;
     }
 
@@ -172,20 +321,23 @@ public class GameManager {
         }
 
         String winnerSide = null;
+        String loserSide = null;
         Chicken winner = null;
         Chicken loser = null;
 
         if (deadChicken.getUniqueId().equals(c1.getUniqueId())) {
-            winnerSide = "blue";
+            winnerSide = BLUE_SIDE;
+            loserSide = RED_SIDE;
             winner = c2;
             loser = c1;
         } else if (deadChicken.getUniqueId().equals(c2.getUniqueId())) {
-            winnerSide = "red";
+            winnerSide = RED_SIDE;
+            loserSide = BLUE_SIDE;
             winner = c1;
             loser = c2;
         }
 
-        if (winner == null || winnerSide == null) {
+        if (winner == null || winnerSide == null || loserSide == null) {
             return;
         }
 
@@ -194,15 +346,16 @@ public class GameManager {
         hideAllBossBars();
         betManager.closeBetting();
 
+        int streak = updateWinstreak(winnerSide, loserSide);
+        refreshFighterNameTags();
+        broadcastWinstreakIfNeeded(winnerSide, streak);
+
         cleanupWinner(winner);
         if (loser != null && !loser.isDead()) {
             loser.remove();
         }
 
-        String winnerName = msg("game.result.default-winner-name");
-        if (winner.customName() != null) {
-            winnerName = PlainTextComponentSerializer.plainText().serialize(winner.customName());
-        }
+        String winnerName = extractPrimaryName(winner, msg("game.result.default-winner-name"));
 
         BetManager.PayoutSummary payoutSummary = betManager.processPayout(winnerSide);
         payoutProcessed = true;
@@ -216,7 +369,7 @@ public class GameManager {
 
     public void forceEnd() {
         // Any forced end means the round is cancelled unless payout is already done.
-        if (!payoutProcessed && betManager.hasAnyBet()) {
+        if (!payoutProcessed && betManager.hasAnyRoundBet()) {
             betManager.refundAll();
         }
 
@@ -243,7 +396,7 @@ public class GameManager {
         }
 
         // Restart cancels current round and always refunds if payout did not happen.
-        if (!payoutProcessed && betManager.hasAnyBet()) {
+        if (!payoutProcessed && betManager.hasAnyRoundBet()) {
             betManager.refundAll();
         }
 
@@ -251,6 +404,7 @@ public class GameManager {
         stopGameLoop();
         hideAllBossBars();
         arenaManager.spawnFighters();
+        refreshFighterNameTags();
 
         payoutProcessed = false;
         gameState = GameState.BETTING;
@@ -347,6 +501,7 @@ public class GameManager {
         }
         if (checkChickensDead()) {
             arenaManager.spawnFighters();
+            refreshFighterNameTags();
         }
 
         gameState = GameState.RUNNING;
@@ -368,12 +523,17 @@ public class GameManager {
                     return;
                 }
 
-                skillManager.tryCastSkill(arenaManager.getChicken1(), arenaManager.getChicken2());
+                updateRunningBossBar();
+
+                String firstSkill = skillManager.tryCastSkill(arenaManager.getChicken1(), arenaManager.getChicken2());
+                sendSkillActionBar(arenaManager.getChicken1(), firstSkill);
                 if (checkChickensDead()) {
                     cancel();
                     return;
                 }
-                skillManager.tryCastSkill(arenaManager.getChicken2(), arenaManager.getChicken1());
+
+                String secondSkill = skillManager.tryCastSkill(arenaManager.getChicken2(), arenaManager.getChicken1());
+                sendSkillActionBar(arenaManager.getChicken2(), secondSkill);
             }
         };
         gameTask.runTaskTimer(plugin, 20L, 20L);
@@ -383,18 +543,29 @@ public class GameManager {
         cancelAutoStartTask();
 
         int autoStartSeconds = Math.max(1, plugin.getConfig().getInt(ConfigKeys.AutoStart.DELAY_SECONDS, 60));
+        autoStartTotalSeconds = autoStartSeconds;
+        autoStartSecondsLeft = autoStartSeconds;
+
         autoStartTask = new BukkitRunnable() {
             @Override
             public void run() {
-                autoStartTask = null;
                 if (gameState != GameState.BETTING || !betManager.hasAnyBet()) {
+                    cancelAutoStartTask();
                     return;
                 }
-                beginPreStartCountdown();
-                MessageUtils.broadcast(msg("game.auto-start.triggered"), NamedTextColor.AQUA);
+
+                if (autoStartSecondsLeft <= 0) {
+                    cancelAutoStartTask();
+                    beginPreStartCountdown();
+                    MessageUtils.broadcast(msg("game.auto-start.triggered"), NamedTextColor.AQUA);
+                    return;
+                }
+
+                updateAutoStartBossBar(autoStartSecondsLeft, autoStartTotalSeconds);
+                autoStartSecondsLeft--;
             }
         };
-        autoStartTask.runTaskLater(plugin, autoStartSeconds * 20L);
+        autoStartTask.runTaskTimer(plugin, 0L, 20L);
         MessageUtils.broadcast(msg("game.auto-start.scheduled", Map.of("seconds", String.valueOf(autoStartSeconds))), NamedTextColor.YELLOW);
     }
 
@@ -415,6 +586,7 @@ public class GameManager {
                     return;
                 }
                 arenaManager.spawnFighters();
+                refreshFighterNameTags();
                 betManager.openBetting();
                 payoutProcessed = false;
                 gameState = GameState.BETTING;
@@ -616,6 +788,15 @@ public class GameManager {
         return Math.max(1, plugin.getConfig().getInt(ConfigKeys.Betting.PRESTART_LOCK_SECONDS, 15));
     }
 
+    private void refreshBettingPhaseBossBar() {
+        if (autoStartTask != null && autoStartSecondsLeft > 0 && betManager.hasAnyBet()) {
+            updateAutoStartBossBar(autoStartSecondsLeft, autoStartTotalSeconds);
+            return;
+        }
+
+        updateBettingBossBar();
+    }
+
     private void updateBettingBossBar() {
         if (!plugin.getConfig().getBoolean(ConfigKeys.BossBar.ENABLED, true)) {
             hideAllBossBars();
@@ -632,6 +813,20 @@ public class GameManager {
         )));
         bar.setProgress(1.0);
         assignBossBarPlayers(bar);
+    }
+
+    private void updateAutoStartBossBar(int secondsLeft, int totalSeconds) {
+        if (!plugin.getConfig().getBoolean(ConfigKeys.BossBar.ENABLED, true)) {
+            hideAllBossBars();
+            return;
+        }
+
+        BossBar bar = getOrCreateBossBar(GameState.BETTING, BarColor.YELLOW);
+        float progress = totalSeconds <= 0 ? 0f : Math.max(0f, Math.min(1f, (float) secondsLeft / totalSeconds));
+        bar.setProgress(progress);
+        bar.setColor(BarColor.YELLOW);
+        bar.setTitle(bossBarTitle("game.bossbar.auto-start", Map.of("seconds", String.valueOf(secondsLeft))));
+        assignBossBarPlayers(bar, true);
     }
 
     private void updateCountdownBossBar(int secondsLeft, int totalSeconds) {
@@ -654,10 +849,18 @@ public class GameManager {
             return;
         }
 
+        String redName = getChickenDisplayName(arenaManager.getChicken1(), plugin.getConfig().getString(ConfigKeys.Arena.CHICKEN1_NAME, "Red"));
+        String blueName = getChickenDisplayName(arenaManager.getChicken2(), plugin.getConfig().getString(ConfigKeys.Arena.CHICKEN2_NAME, "Blue"));
+
         BossBar bar = getOrCreateBossBar(GameState.RUNNING, BarColor.YELLOW);
         bar.setColor(BarColor.YELLOW);
         bar.setProgress(1.0);
-        bar.setTitle(bossBarTitle("game.bossbar.running"));
+        bar.setTitle(bossBarTitle("game.bossbar.running", Map.of(
+                "red_chicken", redName,
+                "blue_chicken", blueName,
+                "red_health", formatHealth(arenaManager.getChicken1()),
+                "blue_health", formatHealth(arenaManager.getChicken2())
+        )));
         assignBossBarPlayers(bar);
     }
 
@@ -669,13 +872,19 @@ public class GameManager {
     }
 
     private void assignBossBarPlayers(BossBar bar) {
+        assignBossBarPlayers(bar, false);
+    }
+
+    private void assignBossBarPlayers(BossBar bar, boolean includeBettors) {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (hiddenBossBarPlayers.contains(player.getUniqueId())) {
                 bar.removePlayer(player);
                 continue;
             }
 
-            if (!isPlayerInArenaRange(player)) {
+            boolean inRange = isPlayerInArenaRange(player);
+            boolean isBettor = includeBettors && betManager.hasPlayerBet(player.getUniqueId());
+            if (!inRange && !isBettor) {
                 bar.removePlayer(player);
                 continue;
             }
@@ -686,7 +895,7 @@ public class GameManager {
 
     private void refreshBossBarForCurrentState() {
         switch (gameState) {
-            case BETTING -> updateBettingBossBar();
+            case BETTING -> refreshBettingPhaseBossBar();
             case COUNTDOWN -> updateCountdownBossBar(getConfiguredPrestartSeconds(), getConfiguredPrestartSeconds());
             case RUNNING -> updateRunningBossBar();
             default -> hideAllBossBars();
@@ -719,6 +928,8 @@ public class GameManager {
             autoStartTask.cancel();
             autoStartTask = null;
         }
+        autoStartSecondsLeft = -1;
+        autoStartTotalSeconds = -1;
     }
 
     private void cancelAutoRestartTask() {
@@ -849,10 +1060,14 @@ public class GameManager {
     }
 
     private String getChickenDisplayName(Chicken chicken, String fallback) {
-        if (chicken == null || chicken.customName() == null) {
-            return fallback;
+        return extractPrimaryName(chicken, fallback);
+    }
+
+    private String formatHealth(Chicken chicken) {
+        if (chicken == null || chicken.isDead()) {
+            return "0";
         }
-        return PlainTextComponentSerializer.plainText().serialize(chicken.customName());
+        return HEALTH_DECIMAL.format(Math.max(0.0D, chicken.getHealth()));
     }
 
     private String formatTime(int totalSeconds) {
@@ -866,6 +1081,7 @@ public class GameManager {
     }
 
     private static final DecimalFormat DECIMAL = new DecimalFormat("0.00");
+    private static final DecimalFormat HEALTH_DECIMAL = new DecimalFormat("0.0");
 
     public static class ChickenWarAttackGoal implements Goal<Chicken> {
         private final Chicken chicken;

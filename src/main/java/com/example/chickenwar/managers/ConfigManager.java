@@ -183,14 +183,14 @@ public class ConfigManager {
                     if (targetSection != null) {
                         addedKeys += deepMergeSection(targetSection, sourceSection, fullPath);
                     }
-                } else if (!target.contains(key)) {
+                } else if (!target.contains(key, true)) {
                     ConfigurationSection created = target.createSection(key);
                     addedKeys += deepMergeSection(created, sourceSection, fullPath);
                 }
                 continue;
             }
 
-            if (!target.contains(key)) {
+            if (!target.contains(key, true)) {
                 target.set(key, sourceValue);
                 addedKeys++;
             }

@@ -42,6 +42,9 @@ public class ChickenWarPlugin extends JavaPlugin {
         // 5. Register events
         getServer().getPluginManager().registerEvents(new GameListener(this, gameManager), this);
 
+        // Auto-build arena after startup when configured.
+        getServer().getScheduler().runTask(this, () -> gameManager.autoBuildArenaOnStartup());
+
         getLogger().info("ChickenWar 3.1 (SOLID Architecture) da san sang!");
     }
 

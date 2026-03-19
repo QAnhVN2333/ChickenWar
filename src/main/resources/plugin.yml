@@ -12,5 +12,5 @@ commands:
     usage: /cw help
 permissions:
   chickenwar.admin:
-    description: Quyen Admin cho build/start/end/restart/setwarp/reload
+    description: Quyen Admin cho build/start/end/restart/setwarp/reload va jackpot add/remove/set
     default: op

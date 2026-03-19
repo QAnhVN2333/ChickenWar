@@ -62,6 +62,7 @@ public final class ConfigKeys {
     public static final class ActionBar {
         public static final String ENABLED = "actionbar.enabled";
         public static final String RADIUS = "actionbar.radius";
+        public static final String SKILL_AUDIENCE_MODE = "actionbar.skill-audience";
 
         private ActionBar() {
         }
@@ -97,6 +98,14 @@ public final class ConfigKeys {
         public static final String ABSOLUTE_MAX = "betting-logic.scaling.absolute-max";
 
         private BettingLogic() {
+        }
+    }
+
+    public static final class WinstreakBroadcast {
+        public static final String ENABLED = "winstreak-broadcast.enabled";
+        public static final String STREAKS = "winstreak-broadcast.streaks";
+
+        private WinstreakBroadcast() {
         }
     }
 }
